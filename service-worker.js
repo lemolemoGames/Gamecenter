@@ -1,4 +1,6 @@
-const CACHE_NAME = 'gamecenter-v1';
+
+const CACHE_NAME = 'gamecenter-v2';
+
 const APP_FILES = [
   './',
   './index.html',
@@ -6,6 +8,7 @@ const APP_FILES = [
   './games/colorsort/index.html'
 ];
 
+// インストール
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -14,32 +17,73 @@ self.addEventListener('install', event => {
   );
 });
 
+// 古いキャッシュを削除
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(key => key.startsWith('gamecenter-') && key !== CACHE_NAME)
-            .map(key => caches.delete(key))
+        keys
+          .filter(key =>
+            key.startsWith('gamecenter-') &&
+            key !== CACHE_NAME
+          )
+          .map(key => caches.delete(key))
       ))
       .then(() => self.clients.claim())
   );
 });
 
+// 通信処理
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
+  const request = event.request;
+
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+
+  // 外部サイトは対象外
+  if (url.origin !== self.location.origin) return;
+
+  // HTMLページはネット優先
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME)
+              .then(cache => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(request);
+
+          if (cached) return cached;
+
+          return caches.match('./index.html');
+        })
+    );
+
+    return;
+  }
+
+  // CSS・画像などはキャッシュ優先
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request).then(response => {
-        if (response && response.ok && new URL(event.request.url).origin === self.location.origin) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
-        }
-        return response;
-      }).catch(() => {
-        if (event.request.mode === 'navigate') return caches.match('./index.html');
-        return Response.error();
-      });
-    })
+    caches.match(request)
+      .then(cached => {
+        if (cached) return cached;
+
+        return fetch(request).then(response => {
+          if (response.ok) {
+            const copy = response.clone();
+
+            caches.open(CACHE_NAME)
+              .then(cache => cache.put(request, copy));
+          }
+
+          return response;
+        });
+      })
   );
 });
