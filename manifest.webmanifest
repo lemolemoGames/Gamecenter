@@ -1,0 +1,11 @@
+{
+  "id": "./",
+  "name": "GameCenter",
+  "short_name": "GameCenter",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#f5f5f5"
+}

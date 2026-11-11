@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <title>カラーソート</title>
+</head>
+<body>
+<style>
+        #unique-colorsort-zone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: sans-serif;
+            color: #1a1a2e;
+        }
+
+        #unique-colorsort-zone .container {
+            display: grid;
+            /* 👑 確実に横6列に固定。1列あたりの最大幅を1fr(等分割)にしつつ、最大45pxに制限 */
+            grid-template-columns: repeat(6, minmax(0, 45px));
+            justify-content: center;
+            gap: 20px 12px;
+            /* 縦の隙間 20px、横の隙間 12px */
+            max-width: 360px;
+            /* スマホの画面幅に収まる最大幅 */
+            margin: 40px auto;
+        }
+
+        #unique-colorsort-zone .tube {
+            /* 👑 widthやflex-basisを削除し、gridの横幅いっぱいにフィットさせます */
+            width: 100%;
+            height: 180px;
+            /* 3段並んでもスクロール不要なように高さを少しコンパクト(180px)に調整 */
+            border: 2px solid #333;
+            border-bottom-left-radius: 25px;
+            border-bottom-right-radius: 25px;
+            display: flex;
+            flex-direction: column-reverse;
+            cursor: pointer;
+            transition: transform 0.2s;
+            overflow: hidden;
+            background-color: rgba(0, 0, 0, 0.03);
+            position: relative;
+        }
+
+        #unique-colorsort-zone .tube::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: linear-gradient(to right,
+                    rgba(0, 0, 0, 0.2) 0%,
+                    rgba(255, 255, 255, 0.3) 25%,
+                    rgba(255, 255, 255, 0.0) 40%,
+                    rgba(255, 255, 255, 0.05) 70%,
+                    rgba(0, 0, 0, 0.25) 100%);
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        #unique-colorsort-zone .tube.selected {
+            transform: translateY(-20px);
+            border-color: #000;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        #unique-colorsort-zone .liquid {
+            width: 100%;
+            transition: height 0.3s ease;
+            position: relative;
+            box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.1), inset 0 -1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        /* カラー定義 */
+        #unique-colorsort-zone .c1 {
+            background-color: #00ce33;
+        }
+
+        #unique-colorsort-zone .c2 {
+            background-color: #b83eff;
+        }
+
+        #unique-colorsort-zone .c3 {
+            background-color: #ff0000;
+        }
+
+        #unique-colorsort-zone .c4 {
+            background-color: #ffff1e;
+        }
+
+        #unique-colorsort-zone .c5 {
+            background-color: #1639ff;
+        }
+
+        #unique-colorsort-zone .c6 {
+            background-color: #ff48c2;
+        }
+
+        #unique-colorsort-zone .c7 {
+            background-color: #9f5f00;
+        }
+
+        #unique-colorsort-zone .c8 {
+            background-color: #00ffff;
+        }
+
+        #unique-colorsort-zone .ui-area {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        #unique-colorsort-zone button {
+            background: #333;
+            color: #fff;
+            border: 1px solid #777;
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        #unique-colorsort-zone button:hover {
+            background: #444;
+        }
+
+        #unique-colorsort-zone button:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+        }
+
+        #unique-colorsort-zone #status-msg {
+            margin-top: 15px;
+            height: 1.5em;
+            color: #aaa;
+            font-style: italic;
+        }
+
+        @media screen and (max-width: 500px) {
+            #unique-colorsort-zone .container {
+                /* 横幅は grid-template-columns で自動計算されるため、隙間の微調整だけでOK */
+                gap: 15px 8px;
+                /* スマホ用に隙間を少しだけタイトに */
+                margin: 20px auto;
+            }
+
+            #unique-colorsort-zone .tube {
+                height: 160px;
+                /* 画面の小さいスマホ用にビンの高さをさらに少しコンパクトに */
+            }
+        }
+    </style>
+<div id="unique-colorsort-zone">
+<div class="container"> </div>
+<div class="ui-area"><button class="reset-btn">新しい処方</button> <button class="undo-btn">1手戻る</button>
+<div class="status-msg"> </div>
+</div>
+<script>
+            // ⚠️ 3. 即時関数（IIFE）でプログラムの変数を完全隔離
+            (function () {
+                // 自分の記事のルート要素（専用ゾーン）を1本釣り
+                const root = document.getElementById('unique-colorsort-zone');
+                if (!root) return;
+
+                // ⚠️ 探すときは「document.getElementById」ではなく「root.querySelector」を使う！
+                // これにより、画面全体ではなく【自分の記事の枠内だけ】から要素を探すようになる
+                const container = root.querySelector('.container');
+                const resetBtn = root.querySelector('.reset-btn');
+                const undoBtn = root.querySelector('.undo-btn');
+                const statusMsg = root.querySelector('.status-msg');
+
+                const MAX_CAPACITY = 6;
+                const COLOR_COUNT = 8;
+                const EMPTY_TUBES = 2;
+                const SHUFFLE_COUNT = 2000;
+                const TOTAL_TUBES = COLOR_COUNT + EMPTY_TUBES;
+                const LIQUID_HEIGHT = (100 / MAX_CAPACITY) + "%";
+
+                let tubes = [];
+                let selectedTubeIndex = null;
+                let historyStack = [];
+                let isAllCleared = false;
+
+                // イベントリスナーも自分のボタンにだけ紐付け
+                resetBtn.addEventListener('click', initGame);
+                undoBtn.addEventListener('click', undo);
+
+                function initGame() {
+                    isAllCleared = false;
+                    selectedTubeIndex = null;
+                    historyStack = [];
+                    updateStatus("");
+                    createTubes();
+                    shuffleTubes(SHUFFLE_COUNT);
+                    render();
+                }
+
+                function createTubes() {
+                    tubes = [];
+                    for (let i = 1; i <= COLOR_COUNT; i++) {
+                        tubes.push(Array(MAX_CAPACITY).fill(i));
+                        tubes.push(Array(MAX_CAPACITY).fill(i));
+                    }
+                    for (let i = 0; i < EMPTY_TUBES; i++) {
+                        tubes.push([]);
+                    }
+                }
+
+                function shuffleTubes(count) {
+                    let steps = 0;
+                    while (steps < count) {
+                        const fromIdx = Math.floor(Math.random() * tubes.length);
+                        const toIdx = Math.floor(Math.random() * tubes.length);
+                        if (fromIdx !== toIdx && tubes[fromIdx].length > 0 && tubes[toIdx].length < MAX_CAPACITY) {
+                            tubes[toIdx].push(tubes[fromIdx].pop());
+                            steps++;
+                        }
+                    }
+                }
+
+                function render() {
+                    container.innerHTML = '';
+
+                    tubes.forEach((tube, index) => {
+                        const tubeDiv = document.createElement('div');
+                        tubeDiv.className = `tube ${selectedTubeIndex === index ? 'selected' : ''}`;
+                        tubeDiv.addEventListener('click', () => handleTubeClick(index));
+
+                        tube.forEach(colorID => {
+                            const liquid = document.createElement('div');
+                            liquid.className = `liquid c${colorID}`;
+                            liquid.style.height = LIQUID_HEIGHT;
+                            tubeDiv.appendChild(liquid);
+                        });
+                        container.appendChild(tubeDiv);
+                    });
+
+                    if (undoBtn) {
+                        undoBtn.disabled = historyStack.length === 0;
+                    }
+                }
+
+                function handleTubeClick(index) {
+                    if (isAllCleared) return;
+                    if (selectedTubeIndex === null) {
+                        if (tubes[index].length > 0) {
+                            selectedTubeIndex = index;
+                            updateStatus("移動元を選択中...");
+                        }
+                    } else {
+                        if (selectedTubeIndex !== index) {
+                            const currentStateCopy = JSON.parse(JSON.stringify(tubes));
+                            const moved = moveLiquid(selectedTubeIndex, index);
+                            if (moved) {
+                                historyStack.push(currentStateCopy);
+                                updateStatus("調合中...");
+                            } else {
+                                updateStatus("そこには入りません...");
+                            }
+                        }
+                        selectedTubeIndex = null;
+                    }
+                    render();
+                    checkClear();
+                }
+
+                function undo() {
+                    if (isAllCleared) return;
+                    if (historyStack.length === 0) return;
+                    selectedTubeIndex = null;
+                    tubes = historyStack.pop();
+                    updateStatus("1手戻しました");
+                    render();
+                }
+
+                function moveLiquid(fromIdx, toIdx) {
+                    const fromTube = tubes[fromIdx];
+                    const toTube = tubes[toIdx];
+                    if (fromTube.length === 0) return false;
+
+                    const color = fromTube[fromTube.length - 1];
+
+                    if (toTube.length < MAX_CAPACITY && (toTube.length === 0 || toTube[toTube.length - 1] === color)) {
+                        let movedCount = 0;
+                        while (fromTube.length > 0 && fromTube[fromTube.length - 1] === color && toTube.length < MAX_CAPACITY) {
+                            toTube.push(fromTube.pop());
+                            movedCount++;
+                        }
+                        return movedCount > 0;
+                    }
+                    return false;
+                }
+
+                function updateStatus(msg) {
+                    statusMsg.textContent = msg;
+                }
+
+                function checkClear() {
+                    isAllCleared = tubes.every(tube =>
+                        tube.length === 0 || (tube.length === MAX_CAPACITY && tube.every(c => c === tube[0]))
+                    );
+                    if (isAllCleared) {
+                        updateStatus("―― 調合完了 ――");
+                    }
+                }
+
+                // ゲーム開始
+                initGame();
+            })();
+        </script>
+</div>
+</body>
+</html>
