@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0d5c3a">
+    <title>スパイダーソリティア</title>
+    <style>
+        html,
+        body {
+            min-height: 100%;
+            margin: 0;
+            background: #0d5c3a;
+        }
+
+        body {
+            padding: 8px;
+            font-family: sans-serif;
+        }
+
+        /* ブログ干渉対策：ラッパー内のすべての要素の挙動をリセット */
+        .spider-solitaire-wrapper,
+        .spider-solitaire-wrapper * {
+            box-sizing: border-box !important;
+            overflow: visible !important;
+            /* はてなの非表示バグを強制解除 */
+            max-height: none !important;
+            line-height: normal !important;
+        }
+
+        .spider-solitaire-wrapper {
+            max-width: 100% !important;
+            width: 100% !important;
+            margin: 10px auto !important;
+            text-align: center !important;
+            background-color: #0d5c3a !important;
+            color: #fff !important;
+            font-family: sans-serif !important;
+            padding: 8px !important;
+            border-radius: 10px !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }
+
+        .spider-title {
+            margin: 5px 0 10px 0 !important;
+            color: #ffd700 !important;
+            text-shadow: 1px 1px 2px #000 !important;
+            font-size: 1.3rem !important;
+            border: none !important;
+            padding: 0 !important;
+            background: none !important;
+        }
+
+        .spider-ui-panel {
+            display: flex !important;
+            justify-content: center !important;
+            gap: 6px !important;
+            margin-bottom: 12px !important;
+            align-items: center !important;
+            flex-wrap: wrap !important;
+        }
+
+        .spider-ui-panel button,
+        .spider-mode-select button {
+            background-color: #111 !important;
+            color: #fff !important;
+            border: 2px solid #ffd700 !important;
+            padding: 6px 10px !important;
+            font-size: 11px !important;
+            font-weight: bold !important;
+            border-radius: 6px !important;
+            cursor: pointer !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+            min-height: auto !important;
+            width: auto !important;
+        }
+
+        .spider-ui-panel button:active,
+        .spider-mode-select button:active {
+            background-color: #333 !important;
+        }
+
+        .spider-ui-panel button:disabled {
+            border-color: #555 !important;
+            color: #888 !important;
+            cursor: not-allowed !important;
+            background-color: #222 !important;
+        }
+
+        .spider-mode-select {
+            display: flex !important;
+            justify-content: center !important;
+            gap: 4px !important;
+            margin-bottom: 10px !important;
+        }
+
+        .spider-mode-select button.active {
+            background-color: #ffd700 !important;
+            color: #111 !important;
+            border-color: #fff !important;
+        }
+
+        #spider-stock-count {
+            font-size: 12px !important;
+            font-weight: bold !important;
+            color: #fff !important;
+        }
+
+        #spider-msg {
+            font-weight: bold !important;
+            color: #ffd700 !important;
+            font-size: 14px !important;
+            height: 20px !important;
+            margin-bottom: 5px !important;
+        }
+
+        /* 盤面：スマホでも絶対にはみ出さないように設定 */
+        .spider-game-board {
+            display: grid !important;
+            grid-template-columns: repeat(10, 1fr) !important;
+            gap: 2px !important;
+            background-color: #0a472c !important;
+            padding: 6px 3px !important;
+            border-radius: 8px !important;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5) !important;
+            min-height: 400px !important;
+            width: 100% !important;
+        }
+
+        .spider-column {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            background-color: rgba(0, 0, 0, 0.15) !important;
+            border-radius: 4px !important;
+            min-height: 380px !important;
+            padding: 4px 0 !important;
+            border: 1px dashed rgba(255, 255, 255, 0.1) !important;
+            cursor: pointer !important;
+        }
+
+        /* カード：重ね方のネガティブマージンとはてなブログ対策 */
+        .spider-card {
+            width: 96% !important;
+            aspect-ratio: 2 / 3 !important;
+            background-color: #fff !important;
+            color: #000 !important;
+            border-radius: 3px !important;
+            box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.5) !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-start !important;
+            /* 上部に寄せる */
+            padding: 3px 2px !important;
+            font-size: 11px !important;
+            font-weight: bold !important;
+            position: relative !important;
+            margin-bottom: -115% !important;
+            /* 重なり具合を最適化 */
+            pointer-events: none !important;
+        }
+
+        /* 重なりの優先順位（z-index）を20枚目まで一気に保証 */
+        .spider-card:nth-child(1) {
+            z-index: 1 !important;
+        }
+
+        .spider-card:nth-child(2) {
+            z-index: 2 !important;
+        }
+
+        .spider-card:nth-child(3) {
+            z-index: 3 !important;
+        }
+
+        .spider-card:nth-child(4) {
+            z-index: 4 !important;
+        }
+
+        .spider-card:nth-child(5) {
+            z-index: 5 !important;
+        }
+
+        .spider-card:nth-child(6) {
+            z-index: 6 !important;
+        }
+
+        .spider-card:nth-child(7) {
+            z-index: 7 !important;
+        }
+
+        .spider-card:nth-child(8) {
+            z-index: 8 !important;
+        }
+
+        .spider-card:nth-child(9) {
+            z-index: 9 !important;
+        }
+
+        .spider-card:nth-child(10) {
+            z-index: 10 !important;
+        }
+
+        .spider-card:nth-child(11) {
+            z-index: 11 !important;
+        }
+
+        .spider-card:nth-child(12) {
+            z-index: 12 !important;
+        }
+
+        .spider-card:nth-child(13) {
+            z-index: 13 !important;
+        }
+
+        .spider-card:nth-child(14) {
+            z-index: 14 !important;
+        }
+
+        .spider-card:nth-child(15) {
+            z-index: 15 !important;
+        }
+
+        .spider-card:nth-child(16) {
+            z-index: 16 !important;
+        }
+
+        .spider-card:nth-child(17) {
+            z-index: 17 !important;
+        }
+
+        .spider-card:nth-child(18) {
+            z-index: 18 !important;
+        }
+
+        .spider-card:nth-child(19) {
+            z-index: 19 !important;
+        }
+
+        .spider-card:nth-child(20) {
+            z-index: 20 !important;
+        }
+
+        .spider-card.back {
+            background: linear-gradient(135deg, #b22222 25%, #8b0000 25%, #8b0000 50%, #b22222 50%, #b22222 75%, #8b0000 75%, #8b0000 100%) !important;
+            background-size: 6px 6px !important;
+            border: 1px solid #fff !important;
+        }
+
+        .spider-card.back * {
+            display: none !important;
+        }
+
+        .spider-card.selected {
+            box-shadow: 0 0 0 2px #ffd700, 2px 4px 6px rgba(0, 0, 0, 0.6) !important;
+            transform: translateY(-2px) !important;
+            z-index: 999 !important;
+        }
+
+        .spider-card.red-suit .spider-rank,
+        .spider-card.red-suit .spider-suit {
+            color: #d32f2f !important;
+        }
+
+        .spider-suit {
+            text-align: right !important;
+            color: #000 !important;
+            font-size: 10px !important;
+        }
+
+        .spider-rank {
+            text-align: left !important;
+            color: #000 !important;
+            font-size: 11px !important;
+        }
+
+        /* スマホでの文字サイズ微調整 */
+        @media (max-width: 480px) {
+            .spider-card {
+                font-size: 9px !important;
+                padding: 2px 1px !important;
+            }
+
+            .spider-rank {
+                font-size: 9px !important;
+            }
+
+            .spider-suit {
+                font-size: 8px !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="spider-solitaire-wrapper">
+        <div class="spider-mode-select"><button id="spider-mode-1" class="active">1スート (初級)</button> <button
+                id="spider-mode-2">2スート (中級)</button> <button id="spider-mode-4">4スート (上級)</button></div>
+        <div id="spider-msg"></div>
+        <div class="spider-ui-panel"><button id="spider-btn-reset">新ゲーム</button> <button id="spider-btn-undo"
+                disabled="disabled">↩ 1手戻る</button> <span id="spider-stock-count">山札: 残り 5回</span> <button
+                id="spider-btn-deal">カードを配る</button></div>
+        <div id="spider-board" class="spider-game-board"></div>
+    </div>
+
+    <script>
+        (function () {
+            let columns = [[], [], [], [], [], [], [], [], [], []];
+            let stock = [];
+            let history = [];
+            let isCleared = false;
+            let selectedState = null;
+            let currentSuitMode = 1;
+
+            const RANK_LABELS = { 1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10', 11: 'J', 12: 'Q', 13: 'K' };
+
+            function generateSolvableDeck() {
+                let subDecks = [];
+                let allowedSuits = [];
+                if (currentSuitMode === 1) allowedSuits = ['♠'];
+                if (currentSuitMode === 2) allowedSuits = ['♠', '♥'];
+                if (currentSuitMode === 4) allowedSuits = ['♠', '♥', '♦', '♣'];
+
+                for (let i = 0; i < 8; i++) {
+                    let suit = allowedSuits[i % allowedSuits.length];
+                    let deck = [];
+                    for (let r = 13; r >= 1; r--) {
+                        deck.push({ value: r, suit: suit, isFaceUp: true });
+                    }
+                    subDecks.push(deck);
+                }
+
+                let virtualCols = [[], [], [], [], [], [], [], [], [], []];
+                let colIdx = 0;
+                while (subDecks.length > 0) {
+                    let currentDeck = subDecks.pop();
+                    while (currentDeck.length > 0) {
+                        virtualCols[colIdx].push(currentDeck.shift());
+                        colIdx = (colIdx + 1) % 10;
+                    }
+                }
+
+                for (let step = 0; step < 1500; step++) {
+                    let fromIdx = Math.floor(Math.random() * 10);
+                    let toIdx = Math.floor(Math.random() * 10);
+                    if (fromIdx === toIdx || virtualCols[fromIdx].length === 0) continue;
+
+                    let targetCard = virtualCols[fromIdx][virtualCols[fromIdx].length - 1];
+                    let destColumn = virtualCols[toIdx];
+                    if (destColumn.length > 0 && destColumn[destColumn.length - 1].value === targetCard.value - 1) {
+                        destColumn.push(virtualCols[fromIdx].pop());
+                    }
+                }
+
+                let flatDeck = [];
+                for (let c = 0; c < 10; c++) {
+                    while (virtualCols[c].length > 0) {
+                        flatDeck.push(virtualCols[c].pop());
+                    }
+                }
+
+                columns = [[], [], [], [], [], [], [], [], [], []];
+                stock = [];
+                isCleared = false;
+                selectedState = null;
+
+                for (let i = 0; i < 54; i++) {
+                    let c = i % 10;
+                    let card = flatDeck.pop();
+                    card.isFaceUp = false;
+                    columns[c].push(card);
+                }
+
+                for (let c = 0; c < 10; c++) {
+                    if (columns[c].length > 0) {
+                        columns[c][columns[c].length - 1].isFaceUp = true;
+                    }
+                }
+
+                while (flatDeck.length > 0) {
+                    stock.push(flatDeck.pop());
+                }
+            }
+
+            function initGame() {
+                generateSolvableDeck();
+                history = [];
+                document.getElementById('spider-msg').innerText = '';
+                updateUI();
+            }
+
+            function saveHistory() {
+                history.push(JSON.parse(JSON.stringify({
+                    columns: columns,
+                    stock: stock
+                })));
+                updateUI();
+            }
+
+            function undo() {
+                if (history.length === 0 || isCleared) return;
+                let prev = history.pop();
+                columns = prev.columns;
+                stock = prev.stock;
+                selectedState = null;
+                document.getElementById('spider-msg').innerText = '';
+                updateUI();
+            }
+
+            function dealFromStock() {
+                if (stock.length === 0 || isCleared) return;
+                let totalCardsOnBoard = columns.reduce((sum, col) => sum + col.length, 0);
+
+                if (totalCardsOnBoard >= 10 && columns.some(col => col.length === 0)) {
+                    document.getElementById('spider-msg').innerText = '⚡ 空の列を自動で埋めてから配ります！';
+                    saveHistory();
+
+                    while (columns.some(col => col.length === 0)) {
+                        let emptyIdx = columns.findIndex(col => col.length === 0);
+                        let sourceIdx = columns.findIndex(col => col.length >= 2);
+                        if (sourceIdx === -1) break;
+
+                        let card = columns[sourceIdx].pop();
+                        columns[emptyIdx].push(card);
+
+                        if (columns[sourceIdx].length > 0 && !columns[sourceIdx][columns[sourceIdx].length - 1].isFaceUp) {
+                            columns[sourceIdx][columns[sourceIdx].length - 1].isFaceUp = true;
+                        }
+                    }
+                }
+
+                if (columns.reduce((sum, col) => sum + col.length, 0) >= 10 && columns.some(col => col.length === 0)) {
+                    document.getElementById('spider-msg').innerText = '❌ 自動穴埋めに失敗しました';
+                    return;
+                }
+
+                if (document.getElementById('spider-msg').innerText === '') {
+                    saveHistory();
+                }
+
+                for (let c = 0; c < 10; c++) {
+                    let card = stock.pop();
+                    card.isFaceUp = true;
+                    columns[c].push(card);
+                }
+
+                checkCompleteSuits();
+                updateUI();
+            }
+
+            function handleColumnClick(colIdx) {
+                if (isCleared) return;
+                document.getElementById('spider-msg').innerText = '';
+                let col = columns[colIdx];
+
+                if (selectedState === null || selectedState.colIdx === colIdx) {
+                    if (col.length === 0) return;
+
+                    if (selectedState === null) {
+                        let cardIdx = col.length - 1;
+                        while (cardIdx > 0) {
+                            let current = col[cardIdx];
+                            let parent = col[cardIdx - 1];
+                            if (parent.isFaceUp && parent.value === current.value + 1 && parent.suit === current.suit) {
+                                cardIdx--;
+                            } else {
+                                break;
+                            }
+                        }
+                        selectedState = { colIdx: colIdx, cardIdx: cardIdx, maxCardIdx: cardIdx };
+                    } else {
+                        if (selectedState.cardIdx < col.length - 1) {
+                            selectedState.cardIdx++;
+                        } else {
+                            selectedState = null;
+                        }
+                    }
+                    updateUI();
+                } else {
+                    tryMoveCards(colIdx);
+                    updateUI();
+                }
+            }
+
+            function tryMoveCards(toColIdx) {
+                let fromColIdx = selectedState.colIdx;
+                let currentChosenIdx = selectedState.cardIdx;
+                let fromCol = columns[fromColIdx];
+                let toCol = columns[toColIdx];
+                let finalMoveIdx = -1;
+
+                if (toCol.length === 0) {
+                    finalMoveIdx = currentChosenIdx;
+                } else {
+                    let targetCard = toCol[toCol.length - 1];
+                    let requiredValue = targetCard.value - 1;
+
+                    if (fromCol[currentChosenIdx].value === requiredValue) {
+                        finalMoveIdx = currentChosenIdx;
+                    } else {
+                        for (let i = selectedState.maxCardIdx; i < fromCol.length; i++) {
+                            if (fromCol[i].value === requiredValue) {
+                                finalMoveIdx = i;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (finalMoveIdx !== -1) {
+                    saveHistory();
+                    let movingCards = fromCol.splice(finalMoveIdx);
+                    columns[toColIdx] = toCol.concat(movingCards);
+
+                    if (fromCol.length > 0 && !fromCol[fromCol.length - 1].isFaceUp) {
+                        fromCol[fromCol.length - 1].isFaceUp = true;
+                    }
+                    checkCompleteSuits();
+                } else {
+                    document.getElementById('spider-msg').innerText = '❌ そこには重ねられません！';
+                }
+                selectedState = null;
+            }
+
+            function checkCompleteSuits() {
+                for (let c = 0; c < 10; c++) {
+                    let col = columns[c];
+                    if (col.length < 13) continue;
+
+                    for (let i = 0; i <= col.length - 13; i++) {
+                        if (!col[i].isFaceUp || col[i].value !== 13) continue;
+
+                        let targetSuit = col[i].suit;
+                        let isPerfect = true;
+
+                        for (let j = 0; j < 13; j++) {
+                            if (col[i + j].value !== 13 - j || col[i + j].suit !== targetSuit) {
+                                isPerfect = false;
+                                break;
+                            }
+                        }
+
+                        if (isPerfect) {
+                            col.splice(i, 13);
+                            if (col.length > 0 && !col[col.length - 1].isFaceUp) {
+                                col[col.length - 1].isFaceUp = true;
+                            }
+                            document.getElementById('spider-msg').innerText = `🎉 ${targetSuit} が1束完成しました！`;
+                            break;
+                        }
+                    }
+                }
+                checkWin();
+            }
+
+            function checkWin() {
+                let totalCards = columns.reduce((sum, col) => sum + col.length, 0) + stock.length;
+                if (totalCards === 0) {
+                    isCleared = true;
+                    document.getElementById('spider-msg').innerText = '👑 GAME CLEAR!!! 👑';
+                }
+            }
+
+            function updateUI() {
+                const board = document.getElementById('spider-board');
+                board.innerHTML = '';
+
+                for (let c = 0; c < 10; c++) {
+                    const colDiv = document.createElement('div');
+                    colDiv.classList.add('spider-column');
+                    colDiv.setAttribute('data-col-index', c);
+
+                    columns[c].forEach((card, cardIdx) => {
+                        const cardDiv = document.createElement('div');
+                        cardDiv.classList.add('spider-card');
+
+                        if (!card.isFaceUp) {
+                            cardDiv.classList.add('back');
+                        } else {
+                            if (card.suit === '♥' || card.suit === '♦') {
+                                cardDiv.classList.add('red-suit');
+                            }
+                            // 完全にインラインCSSで横並びをブログ側に強制
+                            cardDiv.innerHTML = `<div style="display:flex !important; justify-content:space-between !important; width:100% !important; height:100% !important;"><div class="spider-rank">${RANK_LABELS[card.value]}</div><div class="spider-suit">${card.suit}</div></div>`;
+                            if (selectedState && selectedState.colIdx === c && cardIdx >= selectedState.cardIdx) {
+                                cardDiv.classList.add('selected');
+                            }
+                        }
+                        colDiv.appendChild(cardDiv);
+                    });
+                    board.appendChild(colDiv);
+                }
+
+                document.getElementById('spider-btn-undo').disabled = (history.length === 0 || isCleared);
+                document.getElementById('spider-stock-count').innerText = `山札:残り${stock.length / 10}回`;
+                document.getElementById('spider-btn-deal').disabled = (stock.length === 0 || isCleared);
+            }
+
+            function updateModeButtons() {
+                [1, 2, 4].forEach(m => {
+                    const btn = document.getElementById(`spider-mode-${m}`);
+                    if (m === currentSuitMode) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', () => {
+                document.getElementById('spider-btn-undo').addEventListener('click', undo);
+                document.getElementById('spider-btn-deal').addEventListener('click', dealFromStock);
+                document.getElementById('spider-btn-reset').addEventListener('click', initGame);
+
+                [1, 2, 4].forEach(m => {
+                    document.getElementById(`spider-mode-${m}`).addEventListener('click', () => {
+                        if (confirm(`難易度を切り替えて新しいゲームを生成しますか？`)) {
+                            currentSuitMode = m;
+                            updateModeButtons();
+                            initGame();
+                        }
+                    });
+                });
+
+                document.getElementById('spider-board').addEventListener('click', (e) => {
+                    const columnElement = e.target.closest('.spider-column');
+                    if (!columnElement) return;
+                    const colIdx = parseInt(columnElement.getAttribute('data-col-index'), 10);
+                    handleColumnClick(colIdx);
+                });
+
+                initGame();
+            });
+        })();
+    </script>
+</body>
+
+</html>
