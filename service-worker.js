@@ -1,11 +1,12 @@
 
-const CACHE_NAME = 'gamecenter-v2';
+const CACHE_NAME = 'gamecenter-v2.1';
 
 const APP_FILES = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './games/colorsort/index.html'
+  './games/colorsort/index.html',
+  './games/spider/index.html'
 ];
 
 // インストール
