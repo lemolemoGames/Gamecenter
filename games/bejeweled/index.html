@@ -25,15 +25,6 @@
             height: 100%;
         }
 
-        /*#bj-gameCanvas {
-            display: block;
-            width: 92vw;
-            height: auto;
-            margin: 0 auto;
-            padding-top: 20px;
-            margin-bottom: 120px;
-        }*/
-
         #bj-score-board {
             position: absolute;
             top: 15px;
@@ -103,10 +94,7 @@
 </head>
 
 <body>
-    <div id="bj-scroll-handle"
-        style="width: 100%; height: 35px; background: #222; text-align: center; color: #aaa; font-size: 11px; line-height: 35px; border-radius: 12px 12px 0 0; user-select: none; box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.5);">
-        ↕ ここをドラッグ・スライドすると画面が動かせます ↕</div>
-    <div id="bj-puzzle-container" style="border-top-left-radius: 0 !important; border-top-right-radius: 0 !important;">
+    <div id="bj-puzzle-container">
         <div id="bj-score-board">SCORE: <span id="bj-score">0</span></div>
         <div id="bj-time-bar-container">
             <div id="bj-time-bar"></div>
@@ -165,10 +153,16 @@
 
             resize() {
                 const rect = this.container.getBoundingClientRect();
-                this.canvas.width = rect.width * window.devicePixelRatio;
-                this.canvas.height = rect.height * window.devicePixelRatio;
-                this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-                this.width = rect.width; this.height = rect.height;
+                const dpr = window.devicePixelRatio || 1;
+
+                this.canvas.width = rect.width * dpr;
+                this.canvas.height = rect.height * dpr;
+
+                this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+                this.width = rect.width;
+                this.height = rect.height;
+
                 this.repositionGems();
             }
 
@@ -408,7 +402,14 @@
                         bombSpawnGem.type = createdType;
                     }
 
-                    this.score += matchedGems.size * 100;
+                    const count = matchedGems.size;
+
+                    if (count === 3) this.score += 300;
+                    else if (count === 4) this.score += 500;
+                    else if (count === 5) this.score += 1000;
+                    else if (count === 6) this.score += 1500;
+                    else if (count === 7) this.score += 2200;
+                    else if (count >= 8) this.score += 3000 + (count - 8) * 500;
                     this.scoreEl.textContent = this.score.toLocaleString();
                     this.time = Math.min(100, this.time + matchedGems.size * 2.5);
 

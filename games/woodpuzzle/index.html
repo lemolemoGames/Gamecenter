@@ -81,9 +81,12 @@
             background-color: #443030;
             padding: 10px;
             border-radius: 10px;
-            display: inline-block;
+            display: block;
             position: relative;
             z-index: 5;
+            width: fit-content;
+            max-width: 100%;
+            margin: 0 auto;
         }
 
         .wood-puzzle-app .game-grid {
@@ -178,7 +181,7 @@
             position: relative;
         }
 
-        .wood-puzzle-app .wood-piece::before {
+        .wood-puzzle-app .wood-piece.in-showcase::before {
             content: '';
             position: absolute;
             top: -10px;

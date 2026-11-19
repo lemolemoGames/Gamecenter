@@ -137,6 +137,7 @@
             background-color: rgba(0, 0, 0, 0.15) !important;
             border-radius: 4px !important;
             min-height: 380px !important;
+            min-width: 0 !important;
             padding: 4px 0 !important;
             border: 1px dashed rgba(255, 255, 255, 0.1) !important;
             cursor: pointer !important;
@@ -158,9 +159,13 @@
             font-size: 11px !important;
             font-weight: bold !important;
             position: relative !important;
-            margin-bottom: -115% !important;
+            margin-top: -11vw !important;
             /* 重なり具合を最適化 */
             pointer-events: none !important;
+        }
+
+        .spider-card:first-child {
+            margin-top: 0 !important;
         }
 
         /* 重なりの優先順位（z-index）を20枚目まで一気に保証 */
@@ -265,16 +270,16 @@
             color: #d32f2f !important;
         }
 
-        .spider-suit {
-            text-align: right !important;
-            color: #000 !important;
-            font-size: 10px !important;
-        }
-
         .spider-rank {
             text-align: left !important;
             color: #000 !important;
-            font-size: 11px !important;
+            font-size: clamp(9px, 1.1vw, 16px) !important;
+        }
+
+        .spider-suit {
+            text-align: right !important;
+            color: #000 !important;
+            font-size: clamp(8px, 1vw, 14px) !important;
         }
 
         /* スマホでの文字サイズ微調整 */
