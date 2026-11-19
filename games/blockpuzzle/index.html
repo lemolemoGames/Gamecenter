@@ -283,14 +283,18 @@
                 this.handElement.appendChild(showcaseSlot);
             }
 
+
             bindEvents(piece) {
                 let startX = 0;
                 let startY = 0;
                 let isDragTriggered = false;
 
                 const onStart = (e) => {
-                    const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
-                    const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+                    e.preventDefault();
+
+                    const clientX = e.clientX;
+                    const clientY = e.clientY;
+
                     startX = clientX;
                     startY = clientY;
                     isDragTriggered = false;
@@ -298,26 +302,29 @@
                     this.activePiece = piece;
 
                     this.moveHandler = (evt) => {
-                        const moveX = evt.clientX || (evt.touches ? evt.touches[0].clientX : 0);
-                        const moveY = evt.clientY || (evt.touches ? evt.touches[0].clientY : 0);
+                        const moveX = evt.clientX;
+                        const moveY = evt.clientY;
 
-                        if (!isDragTriggered && Math.sqrt(Math.pow(moveX - startX, 2) + Math.pow(moveY - startY, 2)) > 10) {
+                        if (!isDragTriggered &&
+                            Math.sqrt(
+                                Math.pow(moveX - startX, 2) +
+                                Math.pow(moveY - startY, 2)
+                            ) > 10) {
                             isDragTriggered = true;
                             this.startDrag(evt);
                         }
+
                         if (isDragTriggered) {
                             this.drag(evt);
                         }
                     };
 
                     this.endHandler = (evt) => {
-                        window.removeEventListener('mousemove', this.moveHandler);
-                        window.removeEventListener('touchmove', this.moveHandler);
-                        window.removeEventListener('mouseup', this.endHandler);
-                        window.removeEventListener('touchend', this.endHandler);
+                        window.removeEventListener('pointermove', this.moveHandler);
+                        window.removeEventListener('pointerup', this.endHandler);
+                        window.removeEventListener('pointercancel', this.endHandler);
 
                         if (!isDragTriggered) {
-                            evt.preventDefault();
                             this.tryRotatePiece(piece);
                             this.activePiece = null;
                         } else {
@@ -325,14 +332,12 @@
                         }
                     };
 
-                    window.addEventListener('mousemove', this.moveHandler);
-                    window.addEventListener('touchmove', this.moveHandler, { passive: false });
-                    window.addEventListener('mouseup', this.endHandler);
-                    window.addEventListener('touchend', this.endHandler);
+                    window.addEventListener('pointermove', this.moveHandler);
+                    window.addEventListener('pointerup', this.endHandler);
+                    window.addEventListener('pointercancel', this.endHandler);
                 };
 
-                piece.addEventListener('mousedown', onStart);
-                piece.addEventListener('touchstart', onStart, { passive: false });
+                piece.addEventListener('pointerdown', onStart);
             }
 
             startDrag(e) {
