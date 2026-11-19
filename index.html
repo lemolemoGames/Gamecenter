@@ -28,8 +28,9 @@
     }
 
     .game-list {
-      max-width: 560px;
-      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
     }
 
     .game-button {
@@ -105,7 +106,7 @@
 
 <body>
   <main class="game-list" id="home-screen">
-    <h1>GameCenter</h1>
+    <h1>GameCenter</h1><br>
     <button class="game-button" type="button" data-game="colorsort">
       <span>カラーソート</span><span class="arrow">›</span>
     </button>
