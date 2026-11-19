@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'gamecenter-v4';
+const CACHE_NAME = 'gamecenter-v4.1';
 
 const APP_FILES = [
   './',
