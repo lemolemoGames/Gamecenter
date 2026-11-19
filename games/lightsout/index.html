@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>lightsout</title>
+    <style>
+        /* クラス内の要素に限定するため、#board ではなく .lights-out-board に変更 */
+        .lights-out-board {
+            display: grid;
+            grid-template-columns: repeat(5, 65px);
+            /* 60pxのボタン + 隙間 */
+            margin: 0 auto;
+            gap: 5px;
+        }
+
+        .lights-out-board .square {
+            width: 60px;
+            height: 60px;
+            background-color: gray;
+            /* 消灯（灰色） */
+            color: transparent;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+            cursor: pointer;
+        }
+
+        .lights-out-board.hint .square {
+            color: red;
+        }
+
+        .lights-out-board .square.is-on {
+            background-color: pink;
+            /* 点灯（ピンク） */
+        }
+
+        #lights-out-app {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .lights-out-board {
+            display: grid;
+            grid-template-columns: repeat(5, 65px);
+            gap: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="lights-out-app">
+        <div class="lights-out-board"> </div>
+        <div class="controls"><br><button class="btn-restart">このステージをやり直す</button> <button
+                class="btn-newstage">新しいステージ</button> <label>難易度:</label><select class="select-difficulty">
+                <option selected="selected" value="3">初級</option>
+                <option value="5">中級</option>
+                <option value="11">上級</option>
+                <option value="51">超上級</option>
+            </select><br><br><button class="btn-hint">ヒント</button> <br>
+            <p class="message" style="height: 20px; font-weight: bold; color: #27ae60;"> </p>
+        </div>
+    </div>
+
+    <script>
+        class LightsOutGame {
+            constructor(containerId) {
+                this.container = document.getElementById(containerId);
+                if (!this.container) return;
+
+                // セレクタで子要素をカプセル化
+                this.boardElement = this.container.querySelector('.lights-out-board');
+                this.msgElement = this.container.querySelector('.message');
+                this.diffMenu = this.container.querySelector('.select-difficulty');
+                this.reBtn = this.container.querySelector('.btn-restart');
+                this.newBtn = this.container.querySelector('.btn-newstage');
+                this.hintBtn = this.container.querySelector('.btn-hint');
+
+                // 設定値
+                this.size = 5;
+                this.board = [];
+                this.initialBoard = [];
+
+                this.initGame();
+                this.setupEvents();
+            }
+
+            initGame() {
+                this.boardElement.innerHTML = '';
+                for (let r = 0; r < this.size; r++) {
+                    this.board[r] = [];
+                    for (let c = 0; c < this.size; c++) {
+                        this.board[r][c] = 0;
+
+                        // ボタン生成
+                        const btn = document.createElement('div');
+                        btn.classList.add('square');
+                        // カプセル化のためIDではなく dataset を使用
+                        btn.dataset.row = r;
+                        btn.dataset.col = c;
+                        btn.onclick = () => this.clickSquare(r, c);
+                        this.boardElement.appendChild(btn);
+                    }
+                }
+                this.startNewGame();
+            }
+
+            getSquareElement(r, c) {
+                return this.boardElement.querySelector(`.square[data-row="${r}"][data-col="${c}"]`);
+            }
+
+            renderBoard() {
+                for (let r = 0; r < this.size; r++) {
+                    for (let c = 0; c < this.size; c++) {
+                        const btn = this.getSquareElement(r, c);
+                        if (!btn) continue;
+                        if (this.board[r][c] === 1) {
+                            btn.classList.add('is-on');
+                        } else {
+                            btn.classList.remove('is-on');
+                        }
+                    }
+                }
+            }
+
+            toggle(r, c) {
+                if (r < 0 || r >= this.size || c < 0 || c >= this.size) return;
+                this.board[r][c] = 1 - this.board[r][c];
+            }
+
+            flip(r, c) {
+                this.toggle(r, c);       // クリックされたボタン
+                this.toggle(r - 1, c);   // 上
+                this.toggle(r + 1, c);   // 下
+                this.toggle(r, c - 1);   // 左
+                this.toggle(r, c + 1);   // 右
+            }
+
+            checkWin() {
+                const isClear = this.board.every(row => row.every(state => state === 0));
+                if (isClear) {
+                    this.msgElement.textContent = 'CLEAR!';
+                }
+            }
+
+            shuffle() {
+                const selectTimes = parseInt(this.diffMenu.value);
+
+                for (let i = 0; i < selectTimes; i++) {
+                    const r = Math.floor(Math.random() * this.size);
+                    const c = Math.floor(Math.random() * this.size);
+                    this.flip(r, c);
+
+                    const btn = this.getSquareElement(r, c);
+                    if (btn) {
+                        btn.textContent = (btn.textContent === "") ? "●" : "";
+                    }
+                }
+            }
+
+            clickSquare(r, c) {
+                if (this.msgElement.textContent === 'CLEAR!') return; // クリア後はクリック不可
+                this.flip(r, c);
+                this.renderBoard();
+                this.checkWin();
+            }
+
+            resetStage() {
+                this.board = this.initialBoard.map(row => [...row]);
+                this.msgElement.textContent = "";
+                this.renderBoard();
+            }
+
+            startNewGame() {
+                this.boardElement.classList.remove('hint');
+                for (let r = 0; r < this.size; r++) {
+                    this.board[r].fill(0);
+                    for (let c = 0; c < this.size; c++) {
+                        const btn = this.getSquareElement(r, c);
+                        if (btn) btn.textContent = "";
+                    }
+                }
+                this.msgElement.textContent = "";
+
+                this.shuffle();
+                this.initialBoard = this.board.map(row => [...row]); // バックアップ
+                this.renderBoard();
+            }
+
+            hint() {
+                this.boardElement.classList.toggle('hint');
+            }
+
+            setupEvents() {
+                if (this.diffMenu) {
+                    this.diffMenu.onchange = () => {
+                        this.startNewGame();
+                        this.diffMenu.blur();
+                    };
+                }
+                if (this.reBtn) this.reBtn.onclick = () => this.resetStage();
+                if (this.newBtn) this.newBtn.onclick = () => this.startNewGame();
+                if (this.hintBtn) this.hintBtn.onclick = () => this.hint();
+            }
+        }
+
+        // 画面読み込み時にインスタンス化して実行
+        window.addEventListener('DOMContentLoaded', () => {
+            new LightsOutGame('lights-out-app');
+        });
+    </script>
+</body>
+
+</html>

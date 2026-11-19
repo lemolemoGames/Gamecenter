@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff">
+    <title>WoodPuzzle</title>
+    <style>
+        /* 👑 ゲームコンテナ全体（他のアプリと競合しないよう専用クラス化） */
+        .wood-puzzle-app {
+            text-align: center;
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            padding: 10px;
+            box-sizing: border-box;
+            margin: 0 auto;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        /* 👑 コントロールエリア */
+        .wood-puzzle-app .controls {
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            z-index: 999;
+            flex-wrap: wrap;
+            /* スマホでボタンが溢れないように */
+        }
+
+        .wood-puzzle-app .select-box {
+            background-color: #f4efe9;
+            border: 2px solid #8b5e40;
+            color: #4a3b32;
+            padding: 6px 10px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .wood-puzzle-app .btn {
+            background-color: #e6ded4;
+            border: 2px solid #6d4c33;
+            color: #4a3b32;
+            padding: 6px 14px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            appearance: none;
+        }
+
+        .wood-puzzle-app .btn:hover {
+            background-color: #6d4c33;
+            color: #ffffff;
+        }
+
+        /* 💡 答え合わせボタン専用のトグルデザイン */
+        .wood-puzzle-app .btn-guide {
+            background-color: #e6ded4;
+            border: 2px solid #a18338;
+        }
+
+        .wood-puzzle-app .btn-guide.active {
+            background-color: #ffbb00;
+            color: #211616;
+            border-color: #b38400;
+        }
+
+        /* 盤面 */
+        .wood-puzzle-app .board {
+            background-color: #443030;
+            padding: 10px;
+            border-radius: 10px;
+            display: inline-block;
+            position: relative;
+            z-index: 5;
+        }
+
+        .wood-puzzle-app .game-grid {
+            display: grid;
+            grid-template-columns: repeat(var(--board-size, 3), 50px);
+            grid-template-rows: repeat(var(--board-size, 3), 50px);
+            gap: 4px;
+        }
+
+        .wood-puzzle-app .game-slot {
+            position: relative;
+            width: 50px;
+            height: 50px;
+            background-color: #211616;
+            border-radius: 5px;
+            box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.6);
+            box-sizing: border-box;
+            /* 境界線を内側に収める */
+        }
+
+        /* 🛠️ 【新設】答え合わせモードONの時、盤面のスロットに「クッキリ黄色の実線(70%)」を灯す */
+        .wood-puzzle-app.guide-on .game-slot.g-top {
+            border-top: 2px solid rgba(255, 187, 0, 0.7) !important;
+        }
+
+        .wood-puzzle-app.guide-on .game-slot.g-bottom {
+            border-bottom: 2px solid rgba(255, 187, 0, 0.7) !important;
+        }
+
+        .wood-puzzle-app.guide-on .game-slot.g-left {
+            border-left: 2px solid rgba(255, 187, 0, 0.7) !important;
+        }
+
+        .wood-puzzle-app.guide-on .game-slot.g-right {
+            border-right: 2px solid rgba(255, 187, 0, 0.7) !important;
+        }
+
+        .wood-puzzle-app .clear-message {
+            height: 25px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #27ae60;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .wood-puzzle-app .clear-message.show {
+            opacity: 1;
+        }
+
+        /* パーツ置き場 */
+        .wood-puzzle-app .piece-container-bg {
+            width: 100%;
+            max-height: 200px;
+            box-sizing: border-box;
+            background-color: rgba(0, 0, 0, 0.04);
+            border-radius: 12px;
+            padding: 20px 10px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            gap: 8px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            position: relative;
+            z-index: 1;
+            touch-action: pan-y;
+        }
+
+        .wood-puzzle-app .showcase-slot {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background-color: rgba(0, 0, 0, 0.02);
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        .wood-puzzle-app .showcase-slot:empty {
+            display: none;
+        }
+
+        .wood-puzzle-app .wood-piece {
+            display: grid;
+            gap: 4px;
+            cursor: grab;
+            touch-action: none;
+            position: relative;
+        }
+
+        .wood-puzzle-app .wood-piece::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            bottom: -10px;
+            left: -15px;
+            right: -15px;
+            background: transparent;
+            pointer-events: auto;
+            z-index: 10;
+        }
+
+        .wood-puzzle-app .wood-cell {
+            width: 50px;
+            height: 50px;
+            box-sizing: border-box;
+            border: 1px solid transparent;
+            background-clip: padding-box;
+            background-color: #8b5e40;
+            background-image: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.03) 0px, rgba(0, 0, 0, 0.03) 2px, transparent 2px, transparent 5px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.12));
+            border-radius: 4px;
+            box-shadow: 1px 2px 3px rgba(0, 0, 0, 0.35),
+                inset 1px 1px 1px rgba(255, 255, 255, 0.15);
+            visibility: hidden;
+        }
+
+        .wood-puzzle-app .wood-cell.active {
+            visibility: visible;
+        }
+
+        .wood-puzzle-app .wood-piece.in-showcase {
+            transform: scale(0.25) !important;
+            transform-origin: center center !important;
+            position: relative !important;
+            left: auto !important;
+            top: auto !important;
+            pointer-events: auto;
+        }
+
+        .wood-puzzle-app .wood-piece.dragging {
+            cursor: grabbing;
+            transform: scale(0.9) !important;
+            transform-origin: 0 0 !important;
+            z-index: 10000;
+            /* 最前面に固定 */
+            position: fixed !important;
+            transition: none !important;
+        }
+
+        .wood-puzzle-app .wood-piece.dragging .wood-cell {
+            box-shadow: 6px 15px 20px rgba(0, 0, 0, 0.25),
+                inset 1px 1px 1px rgba(255, 255, 255, 0.2);
+        }
+
+        .wood-puzzle-app .wood-piece.snapped {
+            transform: scale(1) !important;
+            transform-origin: 0 0 !important;
+            position: absolute !important;
+            z-index: 10;
+            transition: none !important;
+        }
+
+        .wood-puzzle-app .game-slot .wood-piece .wood-cell {
+            border: 1px solid #63402b !important;
+        }
+
+        /* 👑 ハメ込んだ時にパーツ自身が光る外枠（ユーザーさん設計） */
+        .wood-puzzle-app .game-slot .wood-piece .wood-cell.b-top {
+            border-top: 3px solid #ffbb00 !important;
+        }
+
+        .wood-puzzle-app .game-slot .wood-piece .wood-cell.b-bottom {
+            border-bottom: 3px solid #ffbb00 !important;
+        }
+
+        .wood-puzzle-app .game-slot .wood-piece .wood-cell.b-left {
+            border-left: 3px solid #ffbb00 !important;
+        }
+
+        .wood-puzzle-app .game-slot .wood-piece .wood-cell.b-right {
+            border-right: 3px solid #ffbb00 !important;
+        }
+
+        @media screen and (max-width: 500px) {
+            :root {
+                --cell-size: 11vw;
+            }
+
+            .wood-puzzle-app .game-grid {
+                grid-template-columns: repeat(var(--board-size), var(--cell-size)) !important;
+                grid-template-rows: repeat(var(--board-size), var(--cell-size)) !important;
+                gap: 2px !important;
+            }
+
+            .wood-puzzle-app .game-slot {
+                width: var(--cell-size) !important;
+                height: var(--cell-size) !important;
+            }
+
+            .wood-puzzle-app .wood-piece {
+                display: grid !important;
+                gap: 2px !important;
+                width: auto !important;
+                height: auto !important;
+            }
+
+            .wood-puzzle-app .wood-cell {
+                width: var(--cell-size) !important;
+                height: var(--cell-size) !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="wood-puzzle-container" class="wood-puzzle-app">
+        <div class="controls"><select class="select-box size-select">
+                <option value="3">盤面サイズ: 3 × 3</option>
+                <option value="4">盤面サイズ: 4 × 4</option>
+                <option selected="selected" value="5">盤面サイズ: 5 × 5</option>
+                <option value="6">盤面サイズ: 6 × 6</option>
+                <option value="7">盤面サイズ: 7 × 7</option>
+                <option value="8">盤面サイズ: 8 × 8</option>
+            </select><button class="btn btn-guide">答え:OFF</button> <button class="btn btn-new-puzzle">新しいパズル</button>
+        </div>
+        <div class="board">
+            <div class="game-grid board-grid"> </div>
+        </div>
+        <div class="clear-message">✨ CLEAR! ✨</div>
+        <div class="piece-container-bg piece-bg"> </div>
+    </div>
+
+    <script>
+        class WoodPuzzleGame {
+            constructor(containerId) {
+                this.container = document.getElementById(containerId);
+                if (!this.container) return;
+
+                // コンテナ内限定でDOM要素を取得
+                this.grid = this.container.querySelector('.board-grid');
+                this.pieceBg = this.container.querySelector('.piece-bg');
+                this.clearMsg = this.container.querySelector('.clear-message');
+                this.sizeSelect = this.container.querySelector('.size-select');
+                this.newPuzzleBtn = this.container.querySelector('.btn-new-puzzle');
+                this.guideBtn = this.container.querySelector('.btn-guide'); // 💡 追加
+
+                // 状態管理
+                this.boardSize = 5;
+                this.slots = [];
+                this.activePiece = null;
+                this.touchOffsetX = 0;
+                this.touchOffsetY = 0;
+                this.isGuideOn = false; // 💡 答え合わせフラグ
+
+                // ハンドラのバインド（イベント解除用）
+                this.dragHandler = this.drag.bind(this);
+                this.stopDragHandler = this.stopDrag.bind(this);
+
+                this.initGame();
+                this.setupEventListeners();
+            }
+
+            initGame() {
+                if (!this.grid || !this.pieceBg || !this.clearMsg) return;
+
+                this.clearMsg.classList.remove('show');
+
+                // 既存の動的要素をコンテナ内から綺麗に削除
+                this.container.querySelectorAll('.showcase-slot').forEach(s => s.remove());
+                this.container.querySelectorAll('.wood-piece.snapped').forEach(p => p.remove());
+
+                this.pieceBg.innerHTML = '';
+
+                this.createBoard();
+                this.generateSplittedPieces();
+            }
+
+            createBoard() {
+                this.grid.style.setProperty('--board-size', this.boardSize);
+                this.grid.innerHTML = '';
+                for (let r = 0; r < this.boardSize; r++) {
+                    for (let c = 0; c < this.boardSize; c++) {
+                        const slot = document.createElement('div');
+                        slot.classList.add('game-slot');
+                        slot.dataset.row = r;
+                        slot.dataset.col = c;
+                        slot.dataset.filled = "false";
+                        this.grid.appendChild(slot);
+                    }
+                }
+                this.slots = this.grid.querySelectorAll('.game-slot');
+            }
+
+            generateSplittedPieces() {
+                const matrix = Array.from({ length: this.boardSize }, () => Array(this.boardSize).fill(0));
+                const piecesData = [];
+                const maxPieceSize = this.boardSize >= 6 ? 7 : (this.boardSize > 3 ? 5 : 4);
+
+                for (let r = 0; r < this.boardSize; r++) {
+                    for (let c = 0; c < this.boardSize; c++) {
+                        if (matrix[r][c] === 1) continue;
+
+                        const currentPieceCells = [{ r, c }];
+                        matrix[r][c] = 1;
+                        const targetSize = Math.floor(Math.random() * maxPieceSize) + 1;
+
+                        while (currentPieceCells.length < targetSize) {
+                            const candidates = [];
+                            currentPieceCells.forEach(cell => {
+                                const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+                                dirs.forEach(([dr, dc]) => {
+                                    const nr = cell.r + dr;
+                                    const nc = cell.c + dc;
+                                    if (nr >= 0 && nr < this.boardSize && nc >= 0 && nc < this.boardSize) {
+                                        if (matrix[nr][nc] === 0) {
+                                            if (!candidates.some(cand => cand.r === nr && cand.c === nc)) {
+                                                candidates.push({ r: nr, c: nc });
+                                            }
+                                        }
+                                    }
+                                });
+                            });
+
+                            if (candidates.length === 0) break;
+                            const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+                            matrix[chosen.r][chosen.c] = 1;
+                            currentPieceCells.push(chosen);
+                        }
+                        piecesData.push(currentPieceCells);
+                    }
+                }
+
+                // 🧠 【天才のロジック流用】生成の時点で盤面のスロット（game-slot）側に外枠クラスを直書きする
+                piecesData.forEach(pieceCells => {
+                    pieceCells.forEach(cell => {
+                        const hasTop = pieceCells.some(other => other.r === cell.r - 1 && other.c === cell.c);
+                        const hasBottom = pieceCells.some(other => other.r === cell.r + 1 && other.c === cell.c);
+                        const hasLeft = pieceCells.some(other => other.r === cell.r && other.c === cell.c - 1);
+                        const hasRight = pieceCells.some(other => other.r === cell.r && other.c === cell.c + 1);
+
+                        cell.bTop = !hasTop;
+                        cell.bBottom = !hasBottom;
+                        cell.bLeft = !hasLeft;
+                        cell.bRight = !hasRight;
+
+                        // 💡 盤面側の対応するマス（slot）を直接探して、外枠用のクラス（g-topなど）を仕込む！
+                        const targetSlot = this.getSlot(cell.r, cell.c);
+                        if (targetSlot) {
+                            if (!hasTop) targetSlot.classList.add('g-top');
+                            if (!hasBottom) targetSlot.classList.add('g-bottom');
+                            if (!hasLeft) targetSlot.classList.add('g-left');
+                            if (!hasRight) targetSlot.classList.add('g-right');
+                        }
+                    });
+                });
+
+                piecesData.sort(() => Math.random() - 0.5);
+                this.renderGeneratedPieces(piecesData);
+            }
+
+            renderGeneratedPieces(piecesData) {
+                piecesData.forEach((cells, index) => {
+                    const minR = Math.min(...cells.map(c => c.r));
+                    const minC = Math.min(...cells.map(c => c.c));
+                    const maxR = Math.max(...cells.map(c => c.r));
+                    const maxC = Math.max(...cells.map(c => c.c));
+
+                    const rows = maxR - minR + 1;
+                    const cols = maxC - minC + 1;
+
+                    const showcaseSlot = document.createElement('div');
+                    showcaseSlot.classList.add('showcase-slot');
+                    showcaseSlot.id = `wood-showcase-${index}`;
+
+                    const piece = document.createElement('div');
+                    piece.classList.add('wood-piece', 'in-showcase');
+
+                    if (window.innerWidth > 500) {
+                        piece.style.gridTemplateRows = `repeat(${rows}, 50px)`;
+                        piece.style.gridTemplateColumns = `repeat(${cols}, 50px)`;
+                        piece.style.width = `${cols * 50 + (cols - 1) * 4}px`;
+                        piece.style.height = `${rows * 50 + (rows - 1) * 4}px`;
+                    } else {
+                        piece.style.gridTemplateRows = `repeat(${rows}, var(--cell-size))`;
+                        piece.style.gridTemplateColumns = `repeat(${cols}, var(--cell-size))`;
+                        piece.style.width = 'auto';
+                        piece.style.height = 'auto';
+                    }
+
+                    const relativeMap = Array.from({ length: rows }, () => Array(cols).fill(false));
+                    const absoluteOffsets = [];
+
+                    cells.forEach(c => {
+                        const localR = c.r - minR;
+                        const localC = c.c - minC;
+                        relativeMap[localR][localC] = true;
+                        absoluteOffsets.push({ dr: localR, dc: localC });
+                    });
+
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            const cell = document.createElement('div');
+                            cell.classList.add('wood-cell');
+
+                            if (relativeMap[r][c]) {
+                                cell.classList.add('active');
+
+                                const hasTop = r > 0 ? relativeMap[r - 1][c] : false;
+                                const hasBottom = r < rows - 1 ? relativeMap[r + 1][c] : false;
+                                const hasLeft = c > 0 ? relativeMap[r][c - 1] : false;
+                                const hasRight = c < cols - 1 ? relativeMap[r][c + 1] : false;
+
+                                if (!hasTop) cell.classList.add('b-top');
+                                if (!hasBottom) cell.classList.add('b-bottom');
+                                if (!hasLeft) cell.classList.add('b-left');
+                                if (!hasRight) cell.classList.add('b-right');
+                            }
+                            piece.appendChild(cell);
+                        }
+                    }
+
+                    piece.dataset.offsets = JSON.stringify(absoluteOffsets);
+                    piece.dataset.currentSlots = "";
+                    piece.dataset.originSlotId = `wood-showcase-${index}`;
+
+                    this.bindDragEvents(piece);
+
+                    this.pieceBg.appendChild(showcaseSlot);
+                    showcaseSlot.appendChild(piece);
+                });
+            }
+
+            bindDragEvents(piece) {
+                piece.addEventListener('mousedown', (e) => this.startDrag(e));
+                piece.addEventListener('touchstart', (e) => this.startDrag(e), { passive: false });
+            }
+
+            getSlot(row, col) {
+                return this.grid.querySelector(`.game-slot[data-row="${row}"][data-col="${col}"]`);
+            }
+
+            startDrag(e) {
+                if (this.clearMsg.classList.contains('show')) return;
+                const piece = e.currentTarget || e.target.closest('.wood-piece');
+                if (!piece) return;
+
+                if (e.cancelable) e.preventDefault();
+
+                this.activePiece = piece;
+
+                if (this.activePiece.dataset.currentSlots && this.activePiece.dataset.currentSlots !== "") {
+                    const coordPairs = this.activePiece.dataset.currentSlots.split(';');
+                    coordPairs.forEach(pair => {
+                        if (!pair) return;
+                        const [r, c] = pair.split(',').map(Number);
+                        const slot = this.getSlot(r, c);
+                        if (slot) slot.dataset.filled = "false";
+                    });
+
+                    this.activePiece.dataset.currentSlots = "";
+                    delete this.activePiece.dataset.targetSlotRow;
+                    delete this.activePiece.dataset.targetSlotCol;
+                }
+
+                const rect = this.activePiece.getBoundingClientRect();
+                const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+                const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+
+                this.touchOffsetX = clientX - rect.left;
+                this.touchOffsetY = clientY - rect.top;
+
+                this.activePiece.classList.remove('snapped', 'in-showcase');
+                this.activePiece.classList.add('dragging');
+
+                this.activePiece.style.position = 'fixed';
+                this.activePiece.style.left = `${rect.left}px`;
+                this.activePiece.style.top = `${rect.top}px`;
+
+                // 👑 スマホ最適化のコンテナ退避ロジックを保持
+                this.container.appendChild(this.activePiece);
+
+                window.addEventListener('mousemove', this.dragHandler);
+                window.addEventListener('touchmove', this.dragHandler, { passive: false });
+                window.addEventListener('mouseup', this.stopDragHandler);
+                window.addEventListener('touchend', this.stopDragHandler);
+            }
+
+            drag(e) {
+                if (!this.activePiece) return;
+                if (e.cancelable) e.preventDefault();
+
+                const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+                const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+
+                this.activePiece.style.left = `${clientX - this.touchOffsetX}px`;
+                this.activePiece.style.top = `${clientY - this.touchOffsetY}px`;
+            }
+
+            stopDrag() {
+                if (!this.activePiece) return;
+
+                window.removeEventListener('mousemove', this.dragHandler);
+                window.removeEventListener('touchmove', this.dragHandler);
+                window.removeEventListener('mouseup', this.stopDragHandler);
+                window.removeEventListener('touchend', this.stopDragHandler);
+
+                this.activePiece.classList.remove('dragging');
+
+                const rect = this.activePiece.getBoundingClientRect();
+                const pX = rect.left;
+                const pY = rect.top;
+
+                let closestSlot = null;
+                let minDistance = 35;
+
+                this.slots.forEach(slot => {
+                    const slotRect = slot.getBoundingClientRect();
+                    const sX = slotRect.left;
+                    const sY = slotRect.top;
+
+                    const dx = pX - sX;
+                    const dy = pY - sY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestSlot = slot;
+                    }
+                });
+
+                if (closestSlot) {
+                    const baseRow = parseInt(closestSlot.dataset.row);
+                    const baseCol = parseInt(closestSlot.dataset.col);
+
+                    const offsets = JSON.parse(this.activePiece.dataset.offsets);
+                    const targetSlots = [];
+                    let isSafe = true;
+
+                    for (const offset of offsets) {
+                        const r = baseRow + offset.dr;
+                        const c = baseCol + offset.dc;
+
+                        if (r >= this.boardSize || c >= this.boardSize) {
+                            isSafe = false;
+                            break;
+                        }
+
+                        const slot = this.getSlot(r, c);
+                        if (slot && slot.dataset.filled === "true") {
+                            isSafe = false;
+                            break;
+                        }
+
+                        if (slot) targetSlots.push({ slot, r, c });
+                    }
+
+                    if (isSafe && targetSlots.length === offsets.length) {
+                        closestSlot.appendChild(this.activePiece);
+                        this.activePiece.classList.add('snapped');
+                        this.activePiece.style.left = '0px';
+                        this.activePiece.style.top = '0px';
+
+                        this.activePiece.dataset.targetSlotRow = baseRow;
+                        this.activePiece.dataset.targetSlotCol = baseCol;
+
+                        let coordString = "";
+                        targetSlots.forEach(item => {
+                            item.slot.dataset.filled = "true";
+                            coordString += `${item.r},${item.c};`;
+                        });
+                        this.activePiece.dataset.currentSlots = coordString;
+
+                        this.activePiece = null;
+                        this.checkGameClear();
+                        return;
+                    }
+                }
+
+                const originalShowcase = this.container.querySelector(`#${this.activePiece.dataset.originSlotId}`);
+                if (originalShowcase) {
+                    this.activePiece.style.left = '';
+                    this.activePiece.style.top = '';
+                    this.activePiece.style.position = '';
+
+                    originalShowcase.appendChild(this.activePiece);
+                    this.activePiece.classList.add('in-showcase');
+                } else {
+                    const newSlot = document.createElement('div');
+                    newSlot.classList.add('showcase-slot');
+                    newSlot.id = this.activePiece.dataset.originSlotId;
+                    newSlot.appendChild(this.activePiece);
+                    this.pieceBg.appendChild(newSlot);
+                    this.activePiece.classList.add('in-showcase');
+                }
+
+                this.activePiece = null;
+                this.checkGameClear();
+            }
+
+            checkGameClear() {
+                const allFilled = Array.from(this.slots).every(slot => slot.dataset.filled === "true");
+                if (allFilled) {
+                    this.clearMsg.classList.add('show');
+                } else {
+                    this.clearMsg.classList.remove('show');
+                }
+            }
+
+            setupEventListeners() {
+                if (this.newPuzzleBtn) {
+                    this.newPuzzleBtn.onclick = () => this.initGame();
+                }
+
+                if (this.sizeSelect) {
+                    this.sizeSelect.onchange = (e) => {
+                        this.boardSize = parseInt(e.target.value);
+                        this.initGame();
+                    };
+                }
+
+                // 💡 答え合わせボタンのクリック処理を実装
+                if (this.guideBtn) {
+                    this.guideBtn.onclick = () => {
+                        this.isGuideOn = !this.isGuideOn;
+                        if (this.isGuideOn) {
+                            this.container.classList.add('guide-on');
+                            this.guideBtn.classList.add('active');
+                            this.guideBtn.innerText = "答え: ON";
+                        } else {
+                            this.container.classList.remove('guide-on');
+                            this.guideBtn.classList.remove('active');
+                            this.guideBtn.innerText = "答え:OFF";
+                        }
+                    };
+                }
+            }
+        }
+
+        // ドキュメント読み込み完了時にインスタンス化
+        window.addEventListener('DOMContentLoaded', () => {
+            new WoodPuzzleGame('wood-puzzle-container');
+        });
+    </script>
+</body>
+
+</html>

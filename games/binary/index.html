@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>binary game</title>
+    <style>
+        /* アプリのコンテナ内限定のスタイル定義 */
+        .binary-puzzle-app {
+            font-family: sans-serif;
+            text-align: center;
+            max-width: 500px;
+            margin: 20px auto;
+        }
+
+        .binary-puzzle-app .puzzle-board {
+            display: grid;
+            grid-template-columns: repeat(var(--size), 1fr);
+            gap: calc(12px - var(--size) * 1px);
+            width: 90vw;
+            max-width: 500px;
+            aspect-ratio: 1/1;
+            margin: 20px auto;
+        }
+
+        .binary-puzzle-app .tile {
+            width: 100%;
+            height: 100%;
+            background-color: gray;
+            box-sizing: border-box;
+            border-radius: 4px;
+            transition: 0.2s;
+            cursor: pointer;
+        }
+
+        .binary-puzzle-app .selector-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .binary-puzzle-app .button-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .binary-puzzle-app .btn-ui {
+            min-width: 80px;
+            padding: 4px 12px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .binary-puzzle-app .message {
+            height: 25px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #27ae60;
+            margin-top: 10px;
+        }
+    </style>
+
+</head>
+
+<body>
+    <div id="binary-puzzle-container" class="binary-puzzle-app">
+        <div class="puzzle-board"> </div>
+        <div class="selector-panel">
+            <div class="button-row main-actions"> </div>
+            <div class="button-row size-selectors"> </div>
+        </div>
+        <p class="message"> </p>
+    </div>
+    <script>
+        class BinaryPuzzleGame {
+            constructor(containerId) {
+                this.container = document.getElementById(containerId);
+                if (!this.container) return;
+
+                // コンテナ内のDOM要素を取得
+                this.boardElement = this.container.querySelector('.puzzle-board');
+                this.controlPanel = this.container.querySelector('.selector-panel');
+                this.msgElement = this.container.querySelector('.message');
+
+                // ゲームの状態管理プロパティ
+                this.size = 4;
+                this.boardData = [];
+                this.ansBoard = [];
+                this.isFixed = [];
+                this.isCleared = false;
+                this.hide = 0.5;
+
+                // 初期化
+                this.setupControls();
+                this.initGame();
+            }
+
+            setupControls() {
+                const mainActions = this.container.querySelector('.main-actions');
+                const sizeSelectors = this.container.querySelector('.size-selectors');
+
+                // メインアクションボタン
+                const newGameBtn = document.createElement('button');
+                newGameBtn.textContent = '新しい問題';
+                newGameBtn.className = 'btn-ui';
+                newGameBtn.onclick = () => this.newGame();
+
+                const resetBtn = document.createElement('button');
+                resetBtn.textContent = 'リセット';
+                resetBtn.className = 'btn-ui';
+                resetBtn.onclick = () => this.resetGame();
+
+                const hintBtn = document.createElement('button');
+                hintBtn.textContent = 'ヒント';
+                hintBtn.className = 'btn-ui';
+                hintBtn.onclick = () => this.showHint();
+
+                mainActions.appendChild(newGameBtn);
+                mainActions.appendChild(resetBtn);
+                mainActions.appendChild(hintBtn);
+
+                // サイズ変更ボタン
+                [4, 6, 8, 10, 12].forEach(v => {
+                    const btn = document.createElement('button');
+                    btn.textContent = `${v} x ${v}`;
+                    btn.className = 'btn-ui';
+                    btn.onclick = () => this.changeSize(v);
+                    sizeSelectors.appendChild(btn);
+                });
+            }
+
+            changeSize(newSize) {
+                this.size = newSize;
+                this.boardElement.innerHTML = '';
+                this.boardData.length = 0;
+                this.isFixed.length = 0;
+                this.isCleared = false;
+                this.initGame();
+            }
+
+            initGame() {
+                this.boardElement.style.setProperty('--size', this.size);
+                this.boardElement.innerHTML = '';
+
+                for (let i = 0; i < this.size; i++) {
+                    this.boardData[i] = [];
+                    for (let j = 0; j < this.size; j++) {
+                        this.boardData[i][j] = 0;
+
+                        const btn = document.createElement('div');
+                        btn.classList.add('tile');
+                        btn.dataset.row = i;
+                        btn.dataset.col = j;
+                        btn.addEventListener('click', () => this.toggleTile(i, j));
+                        this.boardElement.appendChild(btn);
+                    }
+                }
+                this.createBoard(0, 0);
+                this.ansBoard = this.boardData.map(row => [...row]);
+                this.createProblem();
+            }
+
+            getTileElement(r, c) {
+                return this.boardElement.querySelector(`.tile[data-row="${r}"][data-col="${c}"]`);
+            }
+
+            toggleTile(r, c) {
+                if (this.isFixed[r][c] || this.isCleared) return;
+                this.boardData[r][c] = (this.boardData[r][c] + 1) % 3;
+                this.updateView();
+                this.checkClear();
+            }
+
+            checkRule(r, c) {
+                const color = this.boardData[r][c];
+                if (color === 0) return true;
+
+                const rowLine = this.boardData[r];
+                if (!this.isValidLine(rowLine)) return false;
+
+                const colLine = [];
+                for (let i = 0; i < this.size; i++) {
+                    colLine.push(this.boardData[i][c]);
+                }
+                if (!this.isValidLine(colLine)) return false;
+
+                if (!rowLine.includes(0)) {
+                    if (!this.isUnique(true)) return false;
+                }
+
+                if (!colLine.includes(0)) {
+                    if (!this.isUnique(false)) return false;
+                }
+                return true;
+            }
+
+            isValidLine(line) {
+                const count1 = line.filter(v => v === 1).length;
+                const count2 = line.filter(v => v === 2).length;
+                if (count1 > this.size / 2 || count2 > this.size / 2) return false;
+
+                for (let i = 0; i < line.length - 2; i++) {
+                    if (line[i] !== 0 && line[i] === line[i + 1] && line[i + 1] === line[i + 2]) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            isUnique(isRow) {
+                const lines = [];
+                for (let i = 0; i < this.size; i++) {
+                    let line;
+                    if (isRow) {
+                        line = this.boardData[i];
+                    } else {
+                        line = [];
+                        for (let j = 0; j < this.size; j++) {
+                            line.push(this.boardData[j][i]);
+                        }
+                    }
+                    if (line.includes(0)) continue;
+
+                    const str = line.join('');
+                    if (lines.includes(str)) return false;
+                    lines.push(str);
+                }
+                return true;
+            }
+
+            createBoard(r, c) {
+                if (r === this.size) return true;
+
+                const nextRow = (c === this.size - 1) ? r + 1 : r;
+                const nextCol = (c === this.size - 1) ? 0 : c + 1;
+
+                if (this.boardData[r][c] !== 0) {
+                    return this.createBoard(nextRow, nextCol);
+                }
+
+                const choices = Math.random() > 0.5 ? [1, 2] : [2, 1];
+
+                for (const color of choices) {
+                    this.boardData[r][c] = color;
+
+                    if (this.checkRule(r, c)) {
+                        if (this.createBoard(nextRow, nextCol)) return true;
+                    }
+                }
+                this.boardData[r][c] = 0;
+                return false;
+            }
+
+            updateView() {
+                const colors = ['gray', '#ff8ac1', '#82d5ff'];
+
+                for (let i = 0; i < this.size; i++) {
+                    for (let j = 0; j < this.size; j++) {
+                        const tile = this.getTileElement(i, j);
+                        if (!tile) continue;
+                        const value = this.boardData[i][j];
+                        tile.style.backgroundColor = colors[value];
+                        tile.style.opacity = "1.0";
+
+                        if (this.isFixed[i] && this.isFixed[i][j]) {
+                            tile.style.border = '3px solid #e7b019';
+                            tile.style.boxShadow = 'inset 4px 4px 10px rgba(0, 0, 0, 0.2)';
+                            tile.style.backgroundImage = 'linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.2) 75%, transparent 75%, transparent)';
+                            tile.style.backgroundSize = '10px 10px';
+                        } else {
+                            tile.style.border = '1px solid #ccc';
+                            tile.style.boxShadow = 'none';
+                            tile.style.backgroundImage = 'none';
+                        }
+                    }
+                }
+            }
+
+            createProblem() {
+                const tiles = [];
+                for (let i = 0; i < this.size; i++) {
+                    this.isFixed[i] = [];
+                    for (let j = 0; j < this.size; j++) {
+                        tiles.push({ r: i, c: j });
+                        this.isFixed[i][j] = true;
+                    }
+                }
+
+                for (let i = tiles.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+                }
+
+                const hideTiles = Math.floor(this.size * this.size * this.hide);
+                for (let i = 0; i < hideTiles; i++) {
+                    const tile = tiles[i];
+                    this.boardData[tile.r][tile.c] = 0;
+                    this.isFixed[tile.r][tile.c] = false;
+                }
+
+                this.updateView();
+            }
+
+            checkClear() {
+                for (let i = 0; i < this.size; i++) {
+                    if (this.boardData[i].includes(0)) return;
+                }
+                for (let i = 0; i < this.size; i++) {
+                    for (let j = 0; j < this.size; j++) {
+                        if (!this.checkRule(i, j)) return;
+                    }
+                }
+                this.isCleared = true;
+                setTimeout(() => {
+                    this.msgElement.textContent = 'CLEAR!';
+                }, 100);
+            }
+
+            newGame() {
+                this.isCleared = false;
+                this.msgElement.textContent = "";
+
+                for (let i = 0; i < this.size; i++) {
+                    for (let j = 0; j < this.size; j++) {
+                        this.boardData[i][j] = 0;
+                        if (this.isFixed[i]) this.isFixed[i][j] = false;
+                    }
+                }
+
+                this.createBoard(0, 0);
+                this.ansBoard = this.boardData.map(row => [...row]);
+                this.createProblem();
+                this.updateView();
+            }
+
+            resetGame() {
+                this.isCleared = false;
+                this.msgElement.textContent = "";
+
+                for (let i = 0; i < this.size; i++) {
+                    for (let j = 0; j < this.size; j++) {
+                        if (!this.isFixed[i][j]) {
+                            this.boardData[i][j] = 0;
+                        }
+                    }
+                }
+                this.updateView();
+            }
+
+            showHint() {
+                if (this.isCleared) return;
+
+                let emptyTiles = [];
+                for (let r = 0; r < this.size; r++) {
+                    for (let c = 0; c < this.size; c++) {
+                        if (this.boardData[r][c] === 0) {
+                            emptyTiles.push({ r, c });
+                        }
+                    }
+                }
+                if (emptyTiles.length === 0) return;
+
+                const target = emptyTiles[Math.floor(Math.random() * emptyTiles.length)];
+                const correctValue = this.ansBoard[target.r][target.c];
+                const tile = this.getTileElement(target.r, target.c);
+                if (!tile) return;
+
+                const colors = ['gray', '#ff8ac1', '#82d5ff'];
+
+                tile.style.backgroundColor = colors[correctValue];
+                tile.style.opacity = "0.5";
+                tile.style.transition = "all 0.9s";
+
+                setTimeout(() => {
+                    if (this.boardData[target.r][target.c] === 0) {
+                        tile.style.backgroundColor = 'gray';
+                        tile.style.opacity = "1.0";
+
+                        setTimeout(() => {
+                            tile.style.transition = "";
+                        }, 900);
+                    } else {
+                        tile.style.transition = "";
+                    }
+                }, 1000);
+            }
+        }
+
+        // ドキュメント読み込み時にインスタンスを生成
+        window.addEventListener('DOMContentLoaded', () => {
+            new BinaryPuzzleGame('binary-puzzle-container');
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>初級1234</title>
+    <style>
+        :root {
+            --bg-primary: #f4f7f6;
+            --surface-color: #ffffff;
+            --text-main: #2c3e50;
+            --text-muted: #7f8c8d;
+            --accent-color: #3498db;
+            --accent-hover: #2980b9;
+            --success-color: #2ecc71;
+            --error-color: #e74c3c;
+            --hint-bg: #edf2f7;
+            --hint-border: #cbd5e1;
+            --border-radius: 12px;
+        }
+
+        #logic-game-root * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #logic-game-root.cleared .key-btn {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        #logic-game-root.cleared .digit-slot {
+            border-color: var(--success-color) !important;
+            background-color: rgba(46, 204, 113, 0.05) !important;
+            color: #1e7e34 !important;
+        }
+
+        #game-memo {
+            font-size: 20px !important;
+        }
+
+        .game-container {
+            width: 95%;
+            max-width: 420px;
+            background: var(--surface-color);
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            padding: 12px;
+            margin: 10px auto;
+            padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .game-container header {
+            text-align: center;
+            margin-bottom: 12px;
+            border-bottom: 2px solid var(--bg-primary);
+            padding-bottom: 8px;
+        }
+
+        .game-container header h1 {
+            font-size: 1.1rem !important;
+            color: var(--text-main) !important;
+            font-weight: 700;
+        }
+
+        .game-container .section-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--text-muted);
+        }
+
+        .game-container .hint-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding-left: 0;
+            margin: 0;
+        }
+
+        .game-container .hint-item {
+            background: var(--surface-color);
+            border: 1px solid var(--hint-border);
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: var(--text-main);
+            text-align: left;
+            line-height: 1.4;
+            user-select: none;
+        }
+
+        .game-container .input-display {
+            display: flex;
+            justify-content: space-between;
+            gap: 6px;
+        }
+
+        .game-container .digit-slot {
+            flex: 1;
+            height: 40px;
+            border: 2px solid var(--hint-border);
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            background: var(--surface-color);
+            color: var(--text-main);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .game-container .digit-slot.active {
+            border-color: var(--accent-color);
+            background-color: rgba(52, 152, 219, 0.05);
+        }
+
+        .game-container .key-btn {
+            background: var(--surface-color);
+            border: 1px solid var(--hint-border);
+            padding: 8px 2px;
+            /* 縦の押しやすさを維持しつつ横の文字切れを防止 */
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--text-main);
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        .game-container .key-btn:active {
+            background: #e2e8f0;
+        }
+
+        .game-container .key-btn.action-btn {
+            background: #edf2f7;
+            font-size: 0.9rem;
+        }
+
+        .game-container .key-btn.submit-btn {
+            background: var(--success-color);
+            color: white;
+            border-color: var(--success-color);
+            font-size: 0.9rem;
+            padding: 8px 0;
+        }
+
+        .game-container .key-btn.submit-btn:active {
+            background: #27ae60;
+        }
+
+        .game-container .message-box {
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: none;
+        }
+
+        .game-container .message-box.success {
+            display: block !important;
+            background-color: rgba(46, 204, 113, 0.15) !important;
+            color: #1e7e34 !important;
+            border: 1px solid rgba(46, 204, 113, 0.3) !important;
+        }
+
+        .game-container .message-box.error {
+            display: block !important;
+            background-color: rgba(231, 76, 60, 0.15) !important;
+            color: #b21f1f !important;
+            border: 1px solid rgba(231, 76, 60, 0.3) !important;
+        }
+
+        .game-container .system-btn {
+            width: 100%;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        .game-container .system-btn:active {
+            background: var(--accent-hover);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="logic-game-root" class="game-container">
+        <header style="margin-bottom: 10px; border-bottom: 1px solid #eee;">
+            <h1 style="margin: 0; font-size: 1.1rem;">4桁パズル『1234』</h1>
+            <p style="margin: 2px 0 0 0; font-size: 0.75rem; color: #7f8c8d;">1, 2, 3, 4 の正しい位置を突き止めろ！</p>
+        </header>
+        <div class="section" style="margin-bottom: 10px;">
+            <div class="section-title">🔍 手がかり</div>
+            <ul id="secondary-hints" class="hint-list"></ul>
+        </div>
+        <div class="section" style="margin-bottom: 10px;">
+            <div class="section-title">📝 メモ</div>
+            <textarea id="game-memo"
+                style="width: 100%; height: 50px; border: 1px solid var(--hint-border); border-radius: 6px; padding: 8px; font-size: 0.85rem; resize: none;"
+                placeholder="推理のメモにどうぞ..."></textarea>
+        </div>
+        <div id="game-message" class="message-box"></div>
+        <div class="section" style="margin-bottom: 10px;">
+            <div class="input-display" style="margin-bottom: 8px;">
+                <div class="digit-slot active" data-index="0">-</div>
+                <div class="digit-slot" data-index="1">-</div>
+                <div class="digit-slot" data-index="2">-</div>
+                <div class="digit-slot" data-index="3">-</div>
+            </div>
+            <div class="keypad" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px;"><button
+                    class="key-btn num-key">1</button> <button class="key-btn num-key">2</button> <button
+                    class="key-btn num-key">3</button> <button class="key-btn num-key">4</button> <button id="key-clear"
+                    class="key-btn action-btn" style="grid-column: span 2;">C</button> <button id="key-back"
+                    class="key-btn action-btn" style="grid-column: span 2;">⌫</button> <button id="key-submit"
+                    class="key-btn submit-btn" style="grid-column: span 4;">回答する</button></div>
+        </div>
+        <button id="btn-restart" class="system-btn" style="padding: 8px; font-size: 0.85rem;">新しい問題を生成</button>
+    </div>
+    <script>
+        (function () {
+            document.addEventListener('touchstart', function (e) { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
+            class HatenaNumberGuessGame {
+                constructor() {
+                    this.rootEl = document.getElementById('logic-game-root');
+                    this.allCandidates = [];
+                    this.answer = "";
+                    this.minimalHints = [];
+                    this.currentInput = ["", "", "", ""];
+                    this.currentSlotIndex = 0;
+                    this.gameCleared = false;
+                    this.initDOMRefs();
+                    this.initEvents();
+                    this.startNewGame();
+                }
+                initDOMRefs() {
+                    this.dom = {
+                        secondaryHints: document.getElementById('secondary-hints'),
+                        slots: document.querySelectorAll('#logic-game-root .digit-slot'),
+                        message: document.getElementById('game-message'),
+                        btnSubmit: document.getElementById('key-submit'),
+                        btnRestart: document.getElementById('btn-restart'),
+                        btnClear: document.getElementById('key-clear'),
+                        btnBack: document.getElementById('key-back'),
+                        memo: document.getElementById('game-memo')
+                    };
+                }
+                initEvents() {
+                    document.querySelectorAll('#logic-game-root .num-key').forEach(btn => {
+                        btn.addEventListener('click', () => this.handleNumInput(btn.textContent));
+                    });
+                    this.dom.btnClear.addEventListener('click', () => this.clearInput());
+                    this.dom.btnBack.addEventListener('click', () => this.handleBackspace());
+                    this.dom.btnSubmit.addEventListener('click', () => this.checkUserAnswer());
+                    this.dom.btnRestart.addEventListener('click', () => this.startNewGame());
+                    this.dom.slots.forEach(slot => {
+                        slot.addEventListener('click', () => {
+                            if (this.gameCleared) return;
+                            this.currentSlotIndex = parseInt(slot.dataset.index);
+                            this.updateInputDisplay();
+                        });
+                    });
+                }
+                // 【1234専用】全候補を「1,2,3,4」の順列（24通り）だけに限定生成
+                generateAllCandidates() {
+                    const result = [];
+                    const permute = (arr, m = []) => {
+                        if (arr.length === 0) {
+                            result.push(m.join(''));
+                        } else {
+                            for (let i = 0; i < arr.length; i++) {
+                                let curr = arr.slice();
+                                let next = curr.splice(i, 1);
+                                permute(curr.slice(), m.concat(next));
+                            }
+                        }
+                    }
+                    permute([1, 2, 3, 4]);
+                    return result;
+                }
+                startNewGame() {
+                    this.gameCleared = false;
+                    this.rootEl.classList.remove('cleared');
+                    this.clearInput();
+                    this.dom.message.style.display = 'none';
+                    this.dom.message.className = 'message-box';
+                    this.dom.memo.value = "";
+
+                    // 1,2,3,4の24通りから答えを選ぶ
+                    this.allCandidates = this.generateAllCandidates();
+                    this.answer = this.allCandidates[Math.floor(Math.random() * this.allCandidates.length)];
+                    console.log("[管理者デバッグ] 答え:", this.answer);
+
+                    this.generateAndMinimizeHints();
+                    this.renderHints();
+                }
+                generatePotentialHints() {
+                    const pool = [];
+                    const ans = this.answer;
+
+                    // パターンB：隣接関係
+                    for (let i = 0; i < 3; i++) {
+                        let a = ans[i], b = ans[i + 1];
+                        let sorted = [parseInt(a), parseInt(b)].sort((x, y) => x - y);
+                        pool.push({
+                            text: `「${sorted[0]}」と「${sorted[1]}」は隣り合っています。`,
+                            filter: (s) => {
+                                let idxA = s.indexOf(a), idxB = s.indexOf(b);
+                                return idxA !== -1 && idxB !== -1 && Math.abs(idxA - idxB) === 1;
+                            }
+                        });
+                    }
+
+                    // パターンC：左右の位置関係
+                    for (let i = 0; i < 4; i++) {
+                        for (let j = i + 1; j < 4; j++) {
+                            let a = ans[i], b = ans[j];
+                            pool.push({
+                                text: `「${b}」は、「${a}」よりも右側にあります。`,
+                                filter: (s) => {
+                                    let idxA = s.indexOf(a), idxB = s.indexOf(b);
+                                    return idxA !== -1 && idxB !== -1 && idxB > idxA;
+                                }
+                            });
+                        }
+                    }
+
+                    // パターンD：否定の位置指定
+                    let patternDPool = [];
+                    for (let pos = 0; pos < 4; pos++) {
+                        let digit = ans[pos];
+                        for (let dummy = 0; dummy < 4; dummy++) {
+                            if (pos !== dummy) {
+                                patternDPool.push({
+                                    text: `「${digit}」は、左から${dummy + 1}番目ではありません。`,
+                                    filter: (s) => s[dummy] !== digit
+                                });
+                            }
+                        }
+                    }
+                    if (patternDPool.length > 0) {
+                        let randomIndex = Math.floor(Math.random() * patternDPool.length);
+                        pool.push(patternDPool[randomIndex]);
+                    }
+
+                    // パターンE：位置の切り離し・間に入る関係
+                    let sorted1 = [parseInt(ans[0]), parseInt(ans[2])].sort((x, y) => x - y);
+                    pool.push({
+                        text: `「${sorted1[0]}」と「${sorted1[1]}」の間に「${ans[1]}」があります。`,
+                        filter: (s) => {
+                            let i0 = s.indexOf(ans[0]), i1 = s.indexOf(ans[1]), i2 = s.indexOf(ans[2]);
+                            if (i0 === -1 || i1 === -1 || i2 === -1) return false;
+                            return (i0 < i1 && i1 < i2) || (i2 < i1 && i1 < i0);
+                        }
+                    });
+
+                    let sorted2 = [parseInt(ans[1]), parseInt(ans[3])].sort((x, y) => x - y);
+                    pool.push({
+                        text: `「${sorted2[0]}」と「${sorted2[1]}」の間に「${ans[2]}」があります。`,
+                        filter: (s) => {
+                            let i1 = s.indexOf(ans[1]), i2 = s.indexOf(ans[2]), i3 = s.indexOf(ans[3]);
+                            if (i1 === -1 || i2 === -1 || i3 === -1) return false;
+                            return (i1 < i2 && i2 < i3) || (i3 < i2 && i2 < i1);
+                        }
+                    });
+
+                    const distancePairs = [
+                        [ans[0], ans[2]],
+                        [ans[1], ans[3]],
+                        [ans[0], ans[3]]
+                    ];
+
+                    distancePairs.forEach(pair => {
+                        let sPair = [parseInt(pair[0]), parseInt(pair[1])].sort((x, y) => x - y);
+                        pool.push({
+                            text: `「${sPair[0]}」と「${sPair[1]}」の間に別の数字が入ります。`,
+                            filter: (s) => {
+                                let idxA = s.indexOf(pair[0]), idxB = s.indexOf(pair[1]);
+                                if (idxA === -1 || idxB === -1) return false;
+                                return Math.abs(idxA - idxB) > 1;
+                            }
+                        });
+                    });
+
+                    // Fisher-Yatesで完全に公平にシャッフル
+                    for (let i = pool.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [pool[i], pool[j]] = [pool[j], pool[i]];
+                    }
+
+                    return pool;
+                }
+                generateAndMinimizeHints() {
+                    let potentialHints = this.generatePotentialHints();
+                    let activeHints = [];
+                    let currentList = [...this.allCandidates];
+
+                    for (let hint of potentialHints) {
+                        let nextList = currentList.filter(hint.filter);
+                        if (nextList.length < currentList.length || currentList.length === 1) {
+                            activeHints.push(hint);
+                            currentList = nextList;
+                        }
+                        if (currentList.length === 1) break;
+                    }
+
+                    if (currentList.length !== 1) { this.startNewGame(); return; }
+
+                    let changed = true;
+                    while (changed) {
+                        changed = false;
+                        for (let i = 0; i < activeHints.length; i++) {
+                            let testHints = activeHints.filter((_, idx) => idx !== i);
+                            let testList = [...this.allCandidates];
+                            for (let th of testHints) {
+                                testList = testList.filter(th.filter);
+                            }
+                            if (testList.length === 1) {
+                                activeHints.splice(i, 1);
+                                changed = true;
+                                break;
+                            }
+                        }
+                    }
+                    this.minimalHints = activeHints;
+                }
+                renderHints() {
+                    this.dom.secondaryHints.innerHTML = "";
+                    this.minimalHints.forEach(hint => {
+                        const li = document.createElement('li');
+                        li.className = 'hint-item';
+                        li.textContent = hint.text;
+                        this.dom.secondaryHints.appendChild(li);
+                    });
+                }
+                handleNumInput(num) {
+                    if (this.gameCleared) return;
+                    this.currentInput[this.currentSlotIndex] = num;
+                    if (this.currentSlotIndex < 3) this.currentSlotIndex++;
+                    this.updateInputDisplay();
+                }
+                handleBackspace() {
+                    if (this.gameCleared) return;
+                    this.currentInput[this.currentSlotIndex] = "";
+                    if (this.currentSlotIndex > 0) this.currentSlotIndex--;
+                    this.updateInputDisplay();
+                }
+                clearInput() {
+                    this.currentInput = ["", "", "", ""];
+                    this.currentSlotIndex = 0;
+                    this.updateInputDisplay();
+                }
+                updateInputDisplay() {
+                    this.dom.slots.forEach((slot, idx) => {
+                        slot.textContent = this.currentInput[idx] || "-";
+                        if (idx === this.currentSlotIndex && !this.gameCleared) {
+                            slot.classList.add('active');
+                        } else {
+                            slot.classList.remove('active');
+                        }
+                    });
+                }
+                checkUserAnswer() {
+                    if (this.gameCleared) return;
+                    const guessStr = this.currentInput.join("");
+                    if (guessStr.length < 4) { this.showMessege("エラー：4桁すべての数字を入力してください。", "error"); return; }
+                    if (guessStr === this.answer) {
+                        this.gameCleared = true;
+                        this.rootEl.classList.add('cleared');
+                        this.showMessege(`🎉 正解です！答えは「${this.answer}」でした！`, "success");
+                        this.dom.slots.forEach(slot => slot.classList.remove('active'));
+                    } else {
+                        this.showMessege("❌ 違います！手がかりをよく読み直してみましょう。", "error");
+                    }
+                }
+                showMessege(text, type) {
+                    this.dom.message.textContent = text;
+                    this.dom.message.className = `message-box ${type}`;
+                }
+            }
+            window.addEventListener('DOMContentLoaded', () => { new HatenaNumberGuessGame(); });
+        })();
+    </script>
+
+</body>
+
+</html>

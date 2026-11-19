@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>びじゅえるどてきな</title>
+    <style>
+        #bj-puzzle-container {
+            position: relative;
+            width: 100%;
+            height: 70vh;
+            background: #090b0e;
+            overflow: hidden;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        #bj-gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /*#bj-gameCanvas {
+            display: block;
+            width: 92vw;
+            height: auto;
+            margin: 0 auto;
+            padding-top: 20px;
+            margin-bottom: 120px;
+        }*/
+
+        #bj-score-board {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            color: #00ffcc;
+            font-family: sans-serif;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 0 8px rgba(0, 255, 204, 0.6);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #bj-time-bar-container {
+            position: absolute;
+            bottom: 15px;
+            left: 5%;
+            width: 90%;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            overflow: hidden;
+            z-index: 10;
+        }
+
+        #bj-time-bar {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #ff0055, #00f0ff);
+            box-shadow: 0 0 10px #00f0ff;
+        }
+
+        #bj-game-over {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff3366;
+            font-family: sans-serif;
+            font-size: 32px;
+            font-weight: bold;
+            text-shadow: 0 0 20px #ff3366;
+            background: rgba(0, 0, 0, 0.95);
+            padding: 30px 40px;
+            border-radius: 12px;
+            border: 2px solid #ff3366;
+            z-index: 20;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #bj-retry-btn {
+            display: block;
+            margin-top: 20px;
+            padding: 10px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #fff;
+            background: #ff3366;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="bj-scroll-handle"
+        style="width: 100%; height: 35px; background: #222; text-align: center; color: #aaa; font-size: 11px; line-height: 35px; border-radius: 12px 12px 0 0; user-select: none; box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.5);">
+        ↕ ここをドラッグ・スライドすると画面が動かせます ↕</div>
+    <div id="bj-puzzle-container" style="border-top-left-radius: 0 !important; border-top-right-radius: 0 !important;">
+        <div id="bj-score-board">SCORE: <span id="bj-score">0</span></div>
+        <div id="bj-time-bar-container">
+            <div id="bj-time-bar"></div>
+        </div>
+        <div id="bj-game-over">
+            <div>TIME UP!</div>
+            <button id="bj-retry-btn">もう一度プレイ</button>
+        </div>
+        <canvas id="bj-gameCanvas"></canvas>
+    </div>
+    <script>
+        class BejeweledGame {
+            constructor() {
+                this.container = document.getElementById('bj-puzzle-container');
+                this.canvas = document.getElementById('bj-gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.scoreEl = document.getElementById('bj-score');
+                this.timeBar = document.getElementById('bj-time-bar');
+                this.gameOverEl = document.getElementById('bj-game-over');
+
+                document.getElementById('bj-retry-btn').addEventListener('click', () => this.resetGame());
+
+                this.rows = 7; this.cols = 7; this.gemSize = 22;
+                this.gemColors = [
+                    { id: 0, base: '#b81d24', glow: '#ff6b6b' }, // 赤
+                    { id: 1, base: '#1a73ef', glow: '#4ea8de' }, // 青
+                    { id: 2, base: '#f2d500', glow: '#f9d936' }, // 黄
+                    { id: 3, base: '#00d848', glow: '#52b788' }, // 緑
+                    { id: 4, base: '#8a2be2', glow: '#b666d2' }  // 紫
+                ];
+
+                // 💡 フリック判定用の座標管理
+                this.startX = 0;
+                this.startY = 0;
+                this.isTracking = false;
+
+                this.resetGame();
+                this.init();
+            }
+
+            init() {
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+
+                // 💡 フリック（スワイプ）操作への完全移行
+                this.canvas.addEventListener('touchstart', (e) => { e.preventDefault(); this.handleTouchStart(e.touches[0]); }, { passive: false });
+                this.canvas.addEventListener('touchmove', (e) => { e.preventDefault(); this.handleTouchMove(e.touches[0]); }, { passive: false });
+                this.canvas.addEventListener('touchend', () => { this.isTracking = false; }, { passive: false });
+
+                this.canvas.addEventListener('mousedown', (e) => this.handleTouchStart(e));
+                this.canvas.addEventListener('mousemove', (e) => this.handleTouchMove(e));
+                window.addEventListener('mouseup', () => { this.isTracking = false; });
+
+                requestAnimationFrame((t) => this.update(t));
+            }
+
+            resize() {
+                const rect = this.container.getBoundingClientRect();
+                this.canvas.width = rect.width * window.devicePixelRatio;
+                this.canvas.height = rect.height * window.devicePixelRatio;
+                this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                this.width = rect.width; this.height = rect.height;
+                this.repositionGems();
+            }
+
+            resetGame() {
+                this.score = 0; this.time = 100; this.isGameOver = false; this.selectedGem = null; this.particles = [];
+                this.scoreEl.textContent = "0"; this.gameOverEl.style.display = 'none';
+                this.generateValidGrid();
+            }
+
+            generateValidGrid() {
+                const spacingX = this.width / (this.cols + 1);
+                const spacingY = (this.height - 40) / (this.rows + 1);
+                this.gems = [];
+
+                for (let r = 0; r < this.rows; r++) {
+                    for (let c = 0; c < this.cols; c++) {
+                        let allowedColors = [...this.gemColors];
+                        if (c >= 2) {
+                            const g1 = this.gems.find(g => g.row === r && g.col === c - 1);
+                            const g2 = this.gems.find(g => g.row === r && g.col === c - 2);
+                            if (g1 && g2 && g1.colorInfo.id === g2.colorInfo.id) {
+                                allowedColors = allowedColors.filter(color => color.id !== g1.colorInfo.id);
+                            }
+                        }
+                        if (r >= 2) {
+                            const g1 = this.gems.find(g => g.row === r - 1 && g.col === c);
+                            const g2 = this.gems.find(g => g.row === r - 2 && g.col === c);
+                            if (g1 && g2 && g1.colorInfo.id === g2.colorInfo.id) {
+                                allowedColors = allowedColors.filter(color => color.id !== g1.colorInfo.id);
+                            }
+                        }
+                        const info = allowedColors[Math.floor(Math.random() * allowedColors.length)];
+                        this.gems.push({
+                            row: r, col: c,
+                            x: spacingX * (c + 1),
+                            targetX: spacingX * (c + 1),
+                            y: spacingY * (r + 1),
+                            targetY: spacingY * (r + 1),
+                            colorInfo: info,
+                            isDead: false,
+                            type: 'normal'
+                        });
+                    }
+                }
+            }
+
+            repositionGems() {
+                if (!this.gems) return;
+                const spacingX = this.width / (this.cols + 1);
+                const spacingY = (this.height - 40) / (this.rows + 1);
+                this.gems.forEach(g => {
+                    g.x = spacingX * (g.col + 1);
+                    g.targetX = g.x;
+                    g.y = spacingY * (g.row + 1);
+                    g.targetY = g.y;
+                });
+            }
+
+            getXY(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                return { x: (e.clientX || e.pageX) - rect.left, y: (e.clientY || e.pageY) - rect.top };
+            }
+
+            handleTouchStart(e) {
+                if (this.isGameOver) return;
+                const pos = this.getXY(e);
+                this.selectedGem = this.findGem(pos.x, pos.y);
+                if (this.selectedGem) {
+                    this.startX = pos.x;
+                    this.startY = pos.y;
+                    this.isTracking = true;
+                }
+            }
+
+            // 💡 フリックの方向を検知した瞬間に、入れ替えを即時実行！
+            handleTouchMove(e) {
+                if (this.isGameOver || !this.isTracking || !this.selectedGem) return;
+                const pos = this.getXY(e);
+
+                const dx = pos.x - this.startX;
+                const dy = pos.y - this.startY;
+                const threshold = 15; // 15ピクセル動いたらフリックとみなす
+
+                if (Math.sqrt(dx * dx + dy * dy) > threshold) {
+                    this.isTracking = false; // 連続発火を防ぐ
+                    let targetRow = this.selectedGem.row;
+                    let targetCol = this.selectedGem.col;
+
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        // 横方向のフリック
+                        targetCol += dx > 0 ? 1 : -1;
+                    } else {
+                        // 縦方向のフリック
+                        targetRow += dy > 0 ? 1 : -1;
+                    }
+
+                    const targetGem = this.gems.find(g => g.row === targetRow && g.col === targetCol);
+                    if (targetGem) {
+                        this.swapGems(this.selectedGem, targetGem);
+                    }
+                    this.selectedGem = null;
+                }
+            }
+
+            findGem(x, y) {
+                return this.gems.find(g => {
+                    const dx = x - g.x; const dy = y - g.y;
+                    return Math.sqrt(dx * dx + dy * dy) < this.gemSize + 15;
+                });
+            }
+
+            swapGems(g1, g2) {
+                // 現在移動アニメーション中のジェムがあれば、連打や多重フリックによるバグを防ぐため処理しない
+                if (Math.abs(g1.x - g1.targetX) > 0.5 || Math.abs(g1.y - g1.targetY) > 0.5) return;
+                if (Math.abs(g2.x - g2.targetX) > 0.5 || Math.abs(g2.y - g2.targetY) > 0.5) return;
+
+                // 1. 一旦、お互いのマス目座標（row, col）を記憶しておく
+                const r1 = g1.row; const c1 = g1.col;
+                const r2 = g2.row; const c2 = g2.col;
+
+                // 2. 内部データ上で位置を入れ替える
+                g1.row = r2; g1.col = c2;
+                g2.row = r1; g2.col = c1;
+
+                // 3. この段階で「3つ以上揃うか」を即座にシミュレーション判定
+                if (this.checkAndMatch(g2)) {
+                    // ✨ マッチ成功：新しい目標地点へ向かってヌルっと移動
+                    const spacingX = this.width / (this.cols + 1);
+                    const spacingY = (this.height - 40) / (this.rows + 1);
+                    g1.targetX = spacingX * (g1.col + 1); g1.targetY = spacingY * (g1.row + 1);
+                    g2.targetX = spacingX * (g2.col + 1); g2.targetY = spacingY * (g2.row + 1);
+                } else {
+                    // ❌ マッチ失敗（揃わない）：マス目の座標を完全に元の位置に引き戻す
+                    g1.row = r1; g1.col = c1;
+                    g2.row = r2; g2.col = c2; // 💡 確実に元の座標に戻します
+
+                    const spacingX = this.width / (this.cols + 1);
+                    const spacingY = (this.height - 40) / (this.rows + 1);
+
+                    // 行き先（フリックした方向）の座標を計算
+                    const destX1 = spacingX * (c2 + 1); const destY1 = spacingY * (r2 + 1);
+                    const destX2 = spacingX * (c1 + 1); const destY2 = spacingY * (r1 + 1);
+
+                    // 視覚的に「ちょっと突っ込んでカチャッと跳ね返る」エフェクト
+                    g1.x = g1.x * 0.4 + destX1 * 0.6; g1.y = g1.y * 0.4 + destY1 * 0.6;
+                    g2.x = g2.x * 0.4 + destX2 * 0.6; g2.y = g2.y * 0.4 + destY2 * 0.6;
+
+                    // 最終的な目標地点は「元の位置」に設定（updateで自動的に引き戻されます）
+                    g1.targetX = spacingX * (g1.col + 1); g1.targetY = spacingY * (g1.row + 1);
+                    g2.targetX = spacingX * (g2.col + 1); g2.targetY = spacingY * (g2.row + 1);
+                }
+            }
+
+            // 💡 【核心】特殊ボム生成ロジックを搭載したマッチング判定
+            checkAndMatch(triggerGem = null) {
+                let hasMatch = false;
+                let matchedGems = new Set();
+
+                // 判定用の記録マップ
+                let horizontalMatches = new Map();
+                let verticalMatches = new Map();
+
+                // 1. 横チェック
+                for (let r = 0; r < this.rows; r++) {
+                    let matchLen = 1;
+                    for (let c = 0; c < this.cols; c++) {
+                        let current = this.gems.find(g => g.row === r && g.col === c);
+                        let next = this.gems.find(g => g.row === r && g.col === c + 1);
+
+                        if (current && next && current.colorInfo.id === next.colorInfo.id && !current.isDead && !next.isDead) {
+                            matchLen++;
+                        } else {
+                            if (matchLen >= 3) {
+                                for (let i = c - matchLen + 1; i <= c; i++) {
+                                    let g = this.gems.find(gem => gem.row === r && gem.col === i);
+                                    matchedGems.add(g);
+                                    horizontalMatches.set(g, matchLen);
+                                }
+                            }
+                            matchLen = 1;
+                        }
+                    }
+                }
+
+                // 2. 縦チェック
+                for (let c = 0; c < this.cols; c++) {
+                    let matchLen = 1;
+                    for (let r = 0; r < this.rows; r++) {
+                        let current = this.gems.find(g => g.row === r && g.col === c);
+                        let next = this.gems.find(g => g.row === r + 1 && g.col === c);
+
+                        if (current && next && current.colorInfo.id === next.colorInfo.id && !current.isDead && !next.isDead) {
+                            matchLen++;
+                        } else {
+                            if (matchLen >= 3) {
+                                for (let i = r - matchLen + 1; i <= r; i++) {
+                                    let g = this.gems.find(gem => gem.row === i && gem.col === c);
+                                    matchedGems.add(g);
+                                    verticalMatches.set(g, matchLen);
+                                }
+                            }
+                            matchLen = 1;
+                        }
+                    }
+                }
+
+                if (matchedGems.size > 0) {
+                    hasMatch = true;
+                    let scoreMultiplier = matchedGems.size;
+
+                    // 💡 特殊ボムの誕生位置を決定（プレイヤーが触ったジェム、無ければマッチ内のどれか）
+                    let bombSpawnGem = triggerGem && matchedGems.has(triggerGem) ? triggerGem : [...matchedGems][0];
+                    let createdType = 'normal';
+
+                    // 💡 ボムの条件判定
+                    matchedGems.forEach(g => {
+                        // 縦も横も同時に揃った場合（十字・L字）、または5個以上は「十字レーザーボム」
+                        if (horizontalMatches.has(g) && verticalMatches.has(g)) createdType = 'cross';
+                        if ((horizontalMatches.get(g) >= 5) || (verticalMatches.get(g) >= 5)) createdType = 'cross';
+
+                        // 4個消しは「周辺爆破ボム」（すでに十字条件が立ってない場合のみ）
+                        if (createdType !== 'cross' && ((horizontalMatches.get(g) === 4) || (verticalMatches.get(g) === 4))) {
+                            createdType = 'bomb';
+                        }
+
+                        // 💡 すでにボムだったものが消される際、大誘爆を発動！
+                        if (g.type === 'bomb') this.explodeArea(g.row, g.col);
+                        if (g.type === 'cross') this.explodeCross(g.row, g.col);
+
+                        g.isDead = true;
+                        this.createParticles(g.x, g.y, g.colorInfo.glow);
+                    });
+
+                    // 特殊ジェムをその場所に生成（完全に死なせない）
+                    if (createdType !== 'normal' && bombSpawnGem) {
+                        bombSpawnGem.isDead = false;
+                        bombSpawnGem.type = createdType;
+                    }
+
+                    this.score += matchedGems.size * 100;
+                    this.scoreEl.textContent = this.score.toLocaleString();
+                    this.time = Math.min(100, this.time + matchedGems.size * 2.5);
+
+                    setTimeout(() => {
+                        this.refillGems();
+                        this.checkAndMatch(); // 連鎖チェック
+                    }, 250);
+                }
+                return hasMatch;
+            }
+
+            // 💥 周辺3x3マス爆破
+            explodeArea(row, col) {
+                this.gems.forEach(g => {
+                    if (!g.isDead && Math.abs(g.row - row) <= 1 && Math.abs(g.col - col) <= 1) {
+                        g.isDead = true;
+                        this.createParticles(g.x, g.y, '#ffffff');
+                        this.score += 50;
+                        if (g.type === 'bomb') this.explodeArea(g.row, g.col); // 連鎖誘爆
+                        if (g.type === 'cross') this.explodeCross(g.row, g.col);
+                    }
+                });
+            }
+
+            // 💥 十字ライン全爆破
+            explodeCross(row, col) {
+                this.gems.forEach(g => {
+                    if (!g.isDead && (g.row === row || g.col === col)) {
+                        g.isDead = true;
+                        this.createParticles(g.x, g.y, '#00ffff');
+                        this.score += 50;
+                        if (g.type === 'bomb') this.explodeArea(g.row, g.col);
+                        if (g.type === 'cross' && (g.row !== row || g.col !== col)) this.explodeCross(g.row, g.col); // 連鎖誘爆
+                    }
+                });
+            }
+
+            // 💡 変更点：死んだデータを完全削除し、配列を物理的に詰め直すことで重なりを100%防ぐ
+            refillGems() {
+                const spacingX = this.width / (this.cols + 1);
+                const spacingY = (this.height - 40) / (this.rows + 1);
+
+                // 1. まず、完全に死んでいる（消滅した）ジェムを配列から削除する
+                this.gems = this.gems.filter(g => !g.isDead);
+
+                for (let c = 0; c < this.cols; c++) {
+                    // この列に今残っているジェムを、下にあるものから順に取得
+                    let colGems = this.gems.filter(g => g.col === c).sort((a, b) => b.row - a.row);
+
+                    // 2. 残ったジェムの row（行番号）を、下から詰めるように（6, 5, 4...と）再割り当てする
+                    for (let i = 0; i < colGems.length; i++) {
+                        colGems[i].row = this.rows - 1 - i;
+                        colGems[i].targetX = spacingX * (c + 1);
+                        colGems[i].targetY = spacingY * (colGems[i].row + 1);
+                    }
+
+                    // 3. 足りない個数分、新しいジェムを上空に生成して配列に直接ぶち込む
+                    let missingCount = this.rows - colGems.length;
+                    for (let i = 0; i < missingCount; i++) {
+                        let targetRow = missingCount - 1 - i; // 上の空き地から順に埋める
+
+                        let newGem = {
+                            row: targetRow,
+                            col: c,
+                            x: spacingX * (c + 1),
+                            targetX: spacingX * (c + 1),
+                            // 順番に綺麗に降ってくるように上空へ配置
+                            y: -spacingY * (i + 1),
+                            targetY: spacingY * (targetRow + 1),
+                            colorInfo: this.gemColors[Math.floor(Math.random() * this.gemColors.length)],
+                            isDead: false,
+                            type: 'normal'
+                        };
+                        this.gems.push(newGem);
+                    }
+                }
+            }
+
+            createParticles(x, y, color) {
+                for (let i = 0; i < 8; i++) {
+                    this.particles.push({
+                        x: x, y: y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6,
+                        size: Math.random() * 3 + 2, color: color, alpha: 1.0
+                    });
+                }
+            }
+
+            drawGem(ctx, gem) {
+                const size = this.gemSize;
+                ctx.save();
+
+                // 選択中のエフェクト
+                if (this.selectedGem === gem) {
+                    ctx.beginPath(); ctx.arc(gem.x, gem.y, size + 4, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fill();
+                }
+
+                // 💡 1. 通常ジェムの描画（一番最初のお気に入りの質感に完全復元！）
+                // 左上を起点にした美しい立体グラデーション
+                const grad = ctx.createRadialGradient(
+                    gem.x - size * 0.3, gem.y - size * 0.3, size * 0.1,
+                    gem.x, gem.y, size
+                );
+                grad.addColorStop(0, '#ffffff');                     // 綺麗な白いハイライト
+                grad.addColorStop(0.2, gem.colorInfo.glow);           // 鮮やかなメインカラー
+                grad.addColorStop(0.8, gem.colorInfo.base);           // 深みのあるベース
+                grad.addColorStop(1, '#000000');                     // 外周の引き締め
+
+                ctx.beginPath(); ctx.arc(gem.x, gem.y, size, 0, Math.PI * 2);
+                ctx.fillStyle = grad; ctx.fill();
+
+                // 💡 2. 特殊ジェムのときだけ、何色かわかる「カラー発光マーク」を上に重ねる
+                if (gem.type === 'bomb') {
+                    // 周辺爆破：マークの背景に、その色の鮮やかなオーラをボワッと敷く
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = gem.colorInfo.glow; // これで何色ボムか一撃判別！
+
+                    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5;
+                    ctx.beginPath(); ctx.arc(gem.x, gem.y, size * 0.45, 0, Math.PI * 2); ctx.stroke();
+
+                } else if (gem.type === 'cross') {
+                    // 十字レーザー：元の色とサイバー感を両立させる発光ライン
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = gem.colorInfo.glow; // これで何色レーザーか一撃判別！
+
+                    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(gem.x - size * 0.6, gem.y); ctx.lineTo(gem.x + size * 0.6, gem.y);
+                    ctx.moveTo(gem.x, gem.y - size * 0.6); ctx.lineTo(gem.x, gem.y + size * 0.6);
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+
+            update(now) {
+                this.ctx.clearRect(0, 0, this.width, this.height);
+
+                if (!this.isGameOver) {
+                    this.time -= 0.07;
+                    if (this.time <= 0) { this.time = 0; this.isGameOver = true; this.gameOverEl.style.display = 'flex'; }
+                    this.timeBar.style.width = this.time + '%';
+                }
+
+                // 💡 変更点：XとYの移動アニメーションをより確実に同期
+                this.gems.forEach(gem => {
+                    if (gem.isDead) return;
+
+                    // X軸のスライド
+                    if (gem.x !== gem.targetX) {
+                        gem.x += (gem.targetX - gem.x) * 0.25;
+                        if (Math.abs(gem.targetX - gem.x) < 0.5) gem.x = gem.targetX;
+                    }
+                    // Y軸の落下
+                    if (gem.y !== gem.targetY) {
+                        gem.y += (gem.targetY - gem.y) * 0.25;
+                        if (Math.abs(gem.targetY - gem.y) < 0.5) gem.y = gem.targetY;
+                    }
+
+                    this.drawGem(this.ctx, gem);
+                });
+
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i]; p.x += p.vx; p.y += p.vy; p.alpha -= 0.04;
+                    this.ctx.fillStyle = p.color; this.ctx.globalAlpha = p.alpha;
+                    this.ctx.fillRect(p.x, p.y, p.size, p.size); this.ctx.globalAlpha = 1.0;
+                    if (p.alpha <= 0) this.particles.splice(i, 1);
+                }
+                requestAnimationFrame((t) => this.update(t));
+            }
+        }
+        document.addEventListener('DOMContentLoaded', () => { new BejeweledGame(); });
+    </script>
+</body>
+
+</html>

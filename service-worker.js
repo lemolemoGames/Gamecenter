@@ -1,12 +1,22 @@
 
-const CACHE_NAME = 'gamecenter-v3';
+const CACHE_NAME = 'gamecenter-v4';
 
 const APP_FILES = [
   './',
   './index.html',
   './manifest.webmanifest',
   './games/colorsort/index.html',
-  './games/spider/index.html'
+  './games/spider/index.html',
+  './games/1024/index.html',
+  './games/1234/index.html',
+  './games/5678/index.html',
+  './games/ballgame/index.html',
+  './games/bejeweled/index.html',
+  './games/binary/index.html',
+  './games/blockpuzzle/index.html',
+  './games/loghtsout/index.html',
+  './games/woodpuzzle/index.html',
+  './games/sudoku/index.html',
 ];
 
 // インストール

@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>block puzzle</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --board-bg: #e2e8f0;
+            --cell-empty: #ffffff;
+            --cell-filled: #3b82f6;
+            --cell-shadow: rgba(59, 130, 246, 0.35);
+            --text-color: #1e293b;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: var(--text-color);
+            overscroll-behavior: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        h2 {
+            margin: 5px 0;
+            font-size: 1.5rem;
+        }
+
+        #energy-container {
+            font-size: 1.1rem;
+            color: #e11d48;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        #score-container {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        /* 盤面 */
+        .game-board {
+            display: grid;
+            gap: 2px;
+            background-color: var(--board-bg);
+            padding: 4px;
+            border-radius: 8px;
+            width: 90vw;
+            max-width: 350px;
+            aspect-ratio: 1 / 1;
+        }
+
+        .slot {
+            background-color: var(--cell-empty);
+            border-radius: 2px;
+            box-sizing: border-box;
+        }
+
+        .slot.filled {
+            background-color: var(--cell-filled) !important;
+        }
+
+        /* 影（内側だけの縁取りにすることで盤面の歪みを完全に防止） */
+        .slot.preview-shadow {
+            background-color: var(--cell-shadow) !important;
+            box-shadow: inset 0 0 0 2px var(--cell-filled);
+        }
+
+        /* 手札コンテナ */
+        .showcase-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            width: 90vw;
+            max-width: 350px;
+            height: 110px;
+            margin-top: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .showcase-slot {
+            width: 28vw;
+            max-width: 110px;
+            height: 100px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        /* テトリミノのベーススタイル */
+        .tetris-piece {
+            display: grid;
+            gap: 1px;
+            box-sizing: border-box;
+            touch-action: none;
+            z-index: 10;
+        }
+
+        /* 👑 手札にある時は一律で小さく（0.45倍）中央基準で縮小する（はみ出し・潰れを完全防止） */
+        .tetris-piece.in-showcase {
+            transform: scale(0.45) !important;
+            transform-origin: center center;
+        }
+
+        /* ドラッグ中（指で見やすいサイズに固定） */
+        .tetris-piece.dragging {
+            opacity: 0.9;
+            z-index: 9999;
+            transform: scale(0.9) !important;
+            transform-origin: center center;
+        }
+
+        .tetris-cell {
+            box-sizing: border-box;
+        }
+
+        .tetris-cell.active {
+            background-color: var(--cell-filled);
+            border-radius: 3px;
+        }
+
+        #msg {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #64748b;
+            min-height: 1.2rem;
+        }
+
+        #reset-btn {
+            margin-top: 15px;
+            padding: 8px 16px;
+            font-size: 1rem;
+            border: none;
+            background-color: var(--text-color);
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="energy-container">ROTATION ENERGY: <span id="energy-val">0</span></div>
+    <div id="score-container">SCORE: <span id="score-val">0</span></div>
+    <div id="main-board" class="game-board"></div>
+    <div id="msg">テトリミノをタップで回転、ドラッグで配置！</div>
+    <div id="hand-area" class="showcase-container"></div>
+    <p><button id="reset-btn">リセット</button></p>
+
+    <script>
+        const BOARD_SIZE = 10;
+        const HAND_SIZE = 3;
+        const SCORE_PER_CELL = 1;
+        const SCORE_PER_LINE = 10;
+        const SNAP_MIN_DISTANCE = 35;
+
+        const PIECES_DATA_POOL = [
+            [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }, { r: 0, c: 3 }], // I (横)
+            [{ r: 0, c: 0 }, { r: 1, c: 0 }, { r: 2, c: 0 }, { r: 3, c: 0 }], // I (縦)
+            [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }, { r: 1, c: 0 }], // J
+            [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }, { r: 1, c: 2 }], // L
+            [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 1, c: 0 }, { r: 1, c: 1 }], // O
+            [{ r: 0, c: 1 }, { r: 0, c: 2 }, { r: 1, c: 0 }, { r: 1, c: 1 }], // S
+            [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 0, c: 2 }, { r: 1, c: 1 }], // T
+            [{ r: 0, c: 0 }, { r: 0, c: 1 }, { r: 1, c: 1 }, { r: 1, c: 2 }]  // Z
+        ];
+
+        class BlockPuzzleGame {
+            constructor() {
+                this.score = 0;
+                this.rotationEnergy = 0;
+                this.boardData = [];
+                this.slots = [];
+                this.activePiece = null;
+
+                this.boardElement = document.getElementById('main-board');
+                this.handElement = document.getElementById('hand-area');
+                this.scoreElement = document.getElementById('score-val');
+                this.energyElement = document.getElementById('energy-val');
+            }
+
+            init() {
+                this.score = 0;
+                this.rotationEnergy = 0;
+                this.updateScoreDisplay();
+                this.updateEnergyDisplay();
+                this.initBoardData();
+                this.renderBoard();
+                this.refillHand();
+            }
+
+            initBoardData() {
+                this.boardData = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0));
+            }
+
+            renderBoard() {
+                this.boardElement.innerHTML = '';
+                this.boardElement.style.gridTemplateColumns = `repeat(${BOARD_SIZE}, 1fr)`;
+                this.slots = [];
+
+                for (let r = 0; r < BOARD_SIZE; r++) {
+                    for (let c = 0; c < BOARD_SIZE; c++) {
+                        const slot = document.createElement('div');
+                        slot.classList.add('slot');
+                        slot.setAttribute('data-row', r);
+                        slot.setAttribute('data-col', c);
+                        this.boardElement.appendChild(slot);
+                        this.slots.push(slot);
+                    }
+                }
+            }
+
+            refillHand() {
+                this.handElement.innerHTML = '';
+                for (let i = 0; i < HAND_SIZE; i++) {
+                    const randomIndex = Math.floor(Math.random() * PIECES_DATA_POOL.length);
+                    this.createPieceInHand(PIECES_DATA_POOL[randomIndex], i);
+                }
+            }
+
+            createPieceInHand(cells, index) {
+                const minR = Math.min(...cells.map(c => c.r));
+                const minC = Math.min(...cells.map(c => c.c));
+                const maxR = Math.max(...cells.map(c => c.r));
+                const maxC = Math.max(...cells.map(c => c.c));
+
+                const rows = maxR - minR + 1;
+                const cols = maxC - minC + 1;
+
+                const showcaseSlot = document.createElement('div');
+                showcaseSlot.classList.add('showcase-slot');
+                showcaseSlot.id = `showcase-${index}`;
+
+                const piece = document.createElement('div');
+                piece.classList.add('tetris-piece', 'in-showcase');
+
+                // 👑 盤面のマスと全く同じ等倍サイズで実体を生成（CSSのscaleで安全に縮小表示する）
+                const sampleSlot = this.slots[0];
+                const cellSize = sampleSlot ? sampleSlot.getBoundingClientRect().width : 35;
+
+                piece.style.gridTemplateRows = `repeat(${rows}, ${cellSize}px)`;
+                piece.style.gridTemplateColumns = `repeat(${cols}, ${cellSize}px)`;
+                piece.style.width = `${cols * cellSize}px`;
+                piece.style.height = `${rows * cellSize}px`;
+
+                const relativeMap = Array.from({ length: rows }, () => Array(cols).fill(false));
+                const absoluteOffsets = [];
+
+                cells.forEach(c => {
+                    const localR = c.r - minR;
+                    const localC = c.c - minC;
+                    relativeMap[localR][localC] = true;
+                    absoluteOffsets.push({ dr: localR, dc: localC });
+                });
+
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const cell = document.createElement('div');
+                        cell.classList.add('tetris-cell');
+                        if (relativeMap[r][c]) cell.classList.add('active');
+                        piece.appendChild(cell);
+                    }
+                }
+
+                piece.dataset.offsets = JSON.stringify(absoluteOffsets);
+                piece.dataset.originSlotId = `showcase-${index}`;
+                piece.dataset.hasRotated = "false";
+
+                this.bindEvents(piece);
+                showcaseSlot.appendChild(piece);
+                this.handElement.appendChild(showcaseSlot);
+            }
+
+            bindEvents(piece) {
+                let startX = 0;
+                let startY = 0;
+                let isDragTriggered = false;
+
+                const onStart = (e) => {
+                    const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+                    const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+                    startX = clientX;
+                    startY = clientY;
+                    isDragTriggered = false;
+
+                    this.activePiece = piece;
+
+                    this.moveHandler = (evt) => {
+                        const moveX = evt.clientX || (evt.touches ? evt.touches[0].clientX : 0);
+                        const moveY = evt.clientY || (evt.touches ? evt.touches[0].clientY : 0);
+
+                        if (!isDragTriggered && Math.sqrt(Math.pow(moveX - startX, 2) + Math.pow(moveY - startY, 2)) > 10) {
+                            isDragTriggered = true;
+                            this.startDrag(evt);
+                        }
+                        if (isDragTriggered) {
+                            this.drag(evt);
+                        }
+                    };
+
+                    this.endHandler = (evt) => {
+                        window.removeEventListener('mousemove', this.moveHandler);
+                        window.removeEventListener('touchmove', this.moveHandler);
+                        window.removeEventListener('mouseup', this.endHandler);
+                        window.removeEventListener('touchend', this.endHandler);
+
+                        if (!isDragTriggered) {
+                            evt.preventDefault();
+                            this.tryRotatePiece(piece);
+                            this.activePiece = null;
+                        } else {
+                            this.stopDrag();
+                        }
+                    };
+
+                    window.addEventListener('mousemove', this.moveHandler);
+                    window.addEventListener('touchmove', this.moveHandler, { passive: false });
+                    window.addEventListener('mouseup', this.endHandler);
+                    window.addEventListener('touchend', this.endHandler);
+                };
+
+                piece.addEventListener('mousedown', onStart);
+                piece.addEventListener('touchstart', onStart, { passive: false });
+            }
+
+            startDrag(e) {
+                this.activePiece.classList.remove('in-showcase');
+                this.activePiece.classList.add('dragging');
+
+                const rect = this.activePiece.getBoundingClientRect();
+                // 0.9倍のスケールになった状態を想定した中心オフセット
+                this.touchOffsetX = rect.width / 2;
+                this.touchOffsetY = rect.height / 2;
+
+                this.activePiece.style.position = 'fixed';
+                document.body.appendChild(this.activePiece);
+            }
+
+            drag(e) {
+                if (!this.activePiece) return;
+                const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+                const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+
+                this.activePiece.style.left = `${clientX - this.touchOffsetX}px`;
+                this.activePiece.style.top = `${clientY - this.touchOffsetY}px`;
+
+                this.clearPreviewShadows();
+                const closestSlot = this.findClosestSlot();
+
+                if (closestSlot) {
+                    const baseRow = parseInt(closestSlot.getAttribute('data-row'), 10);
+                    const baseCol = parseInt(closestSlot.getAttribute('data-col'), 10);
+                    const offsets = JSON.parse(this.activePiece.dataset.offsets);
+
+                    if (this.canPlacePiece(baseRow, baseCol, offsets)) {
+                        this.drawPreviewShadow(baseRow, baseCol, offsets);
+                    }
+                }
+            }
+
+            stopDrag() {
+                this.clearPreviewShadows();
+                this.activePiece.classList.remove('dragging');
+
+                const closestSlot = this.findClosestSlot();
+                let placedSuccess = false;
+
+                if (closestSlot) {
+                    const baseRow = parseInt(closestSlot.getAttribute('data-row'), 10);
+                    const baseCol = parseInt(closestSlot.getAttribute('data-col'), 10);
+                    const offsets = JSON.parse(this.activePiece.dataset.offsets);
+
+                    if (this.canPlacePiece(baseRow, baseCol, offsets)) {
+                        this.finalizePlacement(baseRow, baseCol, offsets);
+                        placedSuccess = true;
+                    }
+                }
+
+                if (!placedSuccess) {
+                    const originSlot = document.getElementById(this.activePiece.dataset.originSlotId);
+                    if (originSlot) {
+                        this.activePiece.classList.add('in-showcase');
+                        this.activePiece.style.position = 'relative';
+                        this.activePiece.style.left = '';
+                        this.activePiece.style.top = '';
+                        originSlot.appendChild(this.activePiece);
+                        this.activePiece.dataset.hasRotated = "false";
+                    }
+                } else {
+                    this.activePiece.dataset.hasRotated = "false";
+                    this.activePiece.remove();
+                    this.checkAndClearLines();
+                    this.renderBoardDOMByData();
+
+                    if (this.isHandEmpty()) {
+                        this.refillHand();
+                    }
+                }
+                this.activePiece = null;
+            }
+
+            tryRotatePiece(piece) {
+                const hasRotated = piece.dataset.hasRotated === "true";
+                if (!hasRotated && this.rotationEnergy <= 0) return;
+
+                if (!hasRotated) {
+                    this.rotationEnergy--;
+                    piece.dataset.hasRotated = "true";
+                    this.updateEnergyDisplay();
+                }
+
+                let offsets = JSON.parse(piece.dataset.offsets);
+                let rotatedOffsets = offsets.map(o => ({ dr: o.dc, dc: -o.dr }));
+                const minR = Math.min(...rotatedOffsets.map(o => o.dr));
+                const minC = Math.min(...rotatedOffsets.map(o => o.dc));
+                rotatedOffsets = rotatedOffsets.map(o => ({ dr: o.dr - minR, dc: o.dc - minC }));
+
+                const maxR = Math.max(...rotatedOffsets.map(o => o.dr)) + 1;
+                const maxC = Math.max(...rotatedOffsets.map(o => o.dc)) + 1;
+
+                const sampleSlot = this.slots[0];
+                const cellSize = sampleSlot ? sampleSlot.getBoundingClientRect().width : 35;
+
+                // 👑 回転後のグリッド形状に合わせて、px単位の絶対サイズを正確に再適用
+                piece.style.gridTemplateRows = `repeat(${maxR}, ${cellSize}px)`;
+                piece.style.gridTemplateColumns = `repeat(${maxC}, ${cellSize}px)`;
+                piece.style.width = `${maxC * cellSize}px`;
+                piece.style.height = `${maxR * cellSize}px`;
+
+                piece.innerHTML = '';
+                const relativeMap = Array.from({ length: maxR }, () => Array(maxC).fill(false));
+                rotatedOffsets.forEach(o => { relativeMap[o.dr][o.dc] = true; });
+
+                for (let r = 0; r < maxR; r++) {
+                    for (let c = 0; c < maxC; c++) {
+                        const cell = document.createElement('div');
+                        cell.classList.add('tetris-cell');
+                        if (relativeMap[r][c]) cell.classList.add('active');
+                        piece.appendChild(cell);
+                    }
+                }
+
+                piece.dataset.offsets = JSON.stringify(rotatedOffsets);
+            }
+
+            findClosestSlot() {
+                const rect = this.activePiece.getBoundingClientRect();
+                const pX = rect.left;
+                const pY = rect.top;
+                let closestSlot = null;
+                let minDistance = SNAP_MIN_DISTANCE;
+
+                this.slots.forEach(slot => {
+                    const slotRect = slot.getBoundingClientRect();
+                    const distance = Math.sqrt(Math.pow(pX - slotRect.left, 2) + Math.pow(pY - slotRect.top, 2));
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestSlot = slot;
+                    }
+                });
+                return closestSlot;
+            }
+
+            canPlacePiece(baseRow, baseCol, offsets) {
+                for (const offset of offsets) {
+                    const r = baseRow + offset.dr;
+                    const c = baseCol + offset.dc;
+                    if (r >= BOARD_SIZE || c >= BOARD_SIZE || this.boardData[r][c] === 1) return false;
+                }
+                return true;
+            }
+
+            drawPreviewShadow(baseRow, baseCol, offsets) {
+                for (const offset of offsets) {
+                    const r = baseRow + offset.dr;
+                    const c = baseCol + offset.dc;
+                    const slot = this.getSlotDOM(r, c);
+                    if (slot) slot.classList.add('preview-shadow');
+                }
+            }
+
+            clearPreviewShadows() {
+                this.slots.forEach(slot => slot.classList.remove('preview-shadow'));
+            }
+
+            finalizePlacement(baseRow, baseCol, offsets) {
+                for (const offset of offsets) {
+                    const r = baseRow + offset.dr;
+                    const c = baseCol + offset.dc;
+                    this.boardData[r][c] = 1; // 正しく置いた場所を1（ブロックあり）にする
+                    this.score += SCORE_PER_CELL;
+                }
+                this.updateScoreDisplay();
+            }
+
+            renderBoardDOMByData() {
+                for (let r = 0; r < BOARD_SIZE; r++) {
+                    for (let c = 0; c < BOARD_SIZE; c++) {
+                        const slot = this.getSlotDOM(r, c);
+                        if (slot) {
+                            if (this.boardData[r][c] === 1) slot.classList.add('filled');
+                            else slot.classList.remove('filled');
+                        }
+                    }
+                }
+            }
+
+            checkAndClearLines() {
+                const rowsToClear = [];
+                const colsToClear = [];
+
+                for (let r = 0; r < BOARD_SIZE; r++) {
+                    if (this.boardData[r].every(val => val === 1)) rowsToClear.push(r);
+                }
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    let isFull = true;
+                    for (let r = 0; r < BOARD_SIZE; r++) {
+                        if (this.boardData[r][c] === 0) isFull = false;
+                    }
+                    if (isFull) colsToClear.push(c);
+                }
+
+                rowsToClear.forEach(r => { for (let c = 0; c < BOARD_SIZE; c++) this.boardData[r][c] = 0; });
+                colsToClear.forEach(c => { for (let r = 0; r < BOARD_SIZE; r++) this.boardData[r][c] = 0; });
+
+                const totalLines = rowsToClear.length + colsToClear.length;
+                if (totalLines > 0) {
+                    this.rotationEnergy += totalLines;
+                    this.updateEnergyDisplay();
+                }
+                this.score += totalLines * SCORE_PER_LINE * BOARD_SIZE;
+                this.updateScoreDisplay();
+            }
+
+            getSlotDOM(row, col) {
+                return this.slots.find(s => parseInt(s.getAttribute('data-row'), 10) === row && parseInt(s.getAttribute('data-col'), 10) === col);
+            }
+
+            isHandEmpty() {
+                return this.handElement.querySelectorAll('.tetris-piece').length === 0;
+            }
+
+            updateScoreDisplay() { this.scoreElement.textContent = this.score; }
+            updateEnergyDisplay() { if (this.energyElement) this.energyElement.textContent = this.rotationEnergy; }
+        }
+
+        const game = new BlockPuzzleGame();
+        window.addEventListener('load', () => game.init());
+        document.getElementById('reset-btn').addEventListener('click', () => game.init());
+    </script>
+</body>
+
+</html>

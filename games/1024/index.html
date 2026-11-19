@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>たまに4もわくよ</title>
+
+    <style>
+        #cyber-game-container {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            width: 100%;
+            max-width: 340px;
+            margin: 20px auto;
+            text-align: center;
+            background: #1e1e24;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            color: #fff;
+            box-sizing: border-box;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        #cyber-game-status {
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+            color: #a0a0aa;
+            min-height: 1.5rem;
+        }
+
+        #cyber-merge-board {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4 / 5;
+            background: #121214;
+            margin: 0 auto;
+            border: 4px solid #2d2d34;
+            border-radius: 8px;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .cyber-block {
+            position: absolute;
+            box-sizing: border-box;
+            border: 2px solid #121214;
+            border-radius: 6px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.4rem;
+            color: #fff;
+            cursor: grab;
+            /* 指を離したときだけピタッと吸い付くアニメーション */
+            transition: background 0.2s;
+            box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.1);
+            will-change: left, top;
+        }
+
+        .cyber-block:active {
+            cursor: grabbing;
+            z-index: 10;
+        }
+
+        /* ドラッグ中の駒を一番上に */
+
+        /* サイバーネオンカラー */
+        .cyber-num-2 {
+            background: #3b82f6;
+            text-shadow: 0 0 8px #3b82f6;
+        }
+
+        .cyber-num-4 {
+            background: #10b981;
+            text-shadow: 0 0 8px #10b981;
+        }
+
+        .cyber-num-8 {
+            background: #f59e0b;
+            text-shadow: 0 0 8px #f59e0b;
+        }
+
+        .cyber-num-16 {
+            background: #ef4444;
+            text-shadow: 0 0 8px #ef4444;
+        }
+
+        .cyber-num-32 {
+            background: #ec4899;
+            text-shadow: 0 0 8px #ec4899;
+        }
+
+        .cyber-num-64 {
+            background: #8b5cf6;
+            text-shadow: 0 0 8px #8b5cf6;
+        }
+
+        .cyber-num-128 {
+            background: #06b6d4;
+            text-shadow: 0 0 12px #06b6d4;
+        }
+
+        .cyber-num-256 {
+            background: #ff007f;
+            text-shadow: 0 0 12px #ff007f;
+        }
+
+        .cyber-num-512 {
+            background: #a855f7;
+            text-shadow: 0 0 12px #a855f7;
+        }
+
+        .cyber-num-1024 {
+            background: #f43f5e;
+            text-shadow: 0 0 16px #f43f5e;
+        }
+
+        /* 幻の2048（一瞬だけ輝いて消えるレジェンドカラー） */
+        .cyber-num-2048 {
+            background: #eab308;
+            text-shadow: 0 0 24px #eab308;
+            box-shadow: inset 0 0 20px #fff;
+        }
+
+        #cyber-control-panel {
+            margin-top: 15px;
+        }
+
+        .cyber-btn {
+            background: #2d2d34;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .cyber-btn:hover {
+            background: #3e3e48;
+        }
+    </style>
+
+</head>
+
+<body>
+    <div id="cyber-game-container">
+        <div id="cyber-game-status">同じ数字でマージ！！(たまに4も湧くよ)</div>
+        <div id="cyber-merge-board"></div>
+        <div id="cyber-control-panel"><button id="cyber-btn-generate" class="cyber-btn">新しく始める</button></div>
+    </div>
+
+    <script>
+        (() => {
+            const BOARD_COLS = 4;
+            const BOARD_ROWS = 5;
+
+            let blocks = [];
+            let nextId = 1;
+            let isGameOver = false;
+
+            function renderBlocks() {
+                const boardEl = document.getElementById('cyber-merge-board');
+                if (!boardEl) return;
+
+                boardEl.innerHTML = '';
+                blocks.forEach(block => {
+                    const el = document.createElement('div');
+                    el.className = `cyber-block cyber-num-${block.val}`;
+                    el.innerText = block.val;
+                    el.dataset.id = block.id;
+
+                    el.style.width = (100 / BOARD_COLS) + '%';
+                    el.style.height = (100 / BOARD_ROWS) + '%';
+                    el.style.left = (block.x * (100 / BOARD_COLS)) + '%';
+                    el.style.top = (block.y * (100 / BOARD_ROWS)) + '%';
+
+                    if (!isGameOver) {
+                        el.addEventListener('mousedown', onDragStart);
+                        el.addEventListener('touchstart', onDragStart, { passive: false });
+                    }
+                    boardEl.appendChild(el);
+                });
+            }
+
+            function getBlockAt(x, y) {
+                return blocks.find(b => b.x === x && b.y === y);
+            }
+
+            function spawnBlock() {
+                let emptyCells = [];
+                for (let y = 0; y < BOARD_ROWS; y++) {
+                    for (let x = 0; x < BOARD_COLS; x++) {
+                        if (!getBlockAt(x, y)) emptyCells.push({ x, y });
+                    }
+                }
+                if (emptyCells.length === 0) return false;
+
+                const cell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                const val = Math.random() < 0.9 ? 2 : 4; // 10%で4が湧くサイバーガチャ
+                blocks.push({ id: nextId++, val: val, x: cell.x, y: cell.y });
+                return true;
+            }
+
+            function checkGameOver() {
+                if (blocks.length < BOARD_COLS * BOARD_ROWS) return;
+
+                for (let b of blocks) {
+                    const neighbors = [
+                        { x: b.x + 1, y: b.y }, { x: b.x - 1, y: b.y },
+                        { x: b.x, y: b.y + 1 }, { x: b.x, y: b.y - 1 }
+                    ];
+                    for (let n of neighbors) {
+                        let other = getBlockAt(n.x, n.y);
+                        if (other && other.val === b.val) return;
+                    }
+                }
+
+                isGameOver = true;
+                const statusEl = document.getElementById('cyber-game-status');
+                if (statusEl) statusEl.innerHTML = '<strong style="color: #ef4444;">💀 盤面満杯！ゲームオーバー</strong>';
+            }
+
+            // --- 🕹️ 改善されたドラッグ＆重ねるマージロジック ---
+            function onDragStart(e) {
+                if (isGameOver) return;
+                if (e.cancelable) e.preventDefault();
+
+                const boardEl = document.getElementById('cyber-merge-board');
+                if (!boardEl) return;
+
+                const touch = e.type === 'touchstart' ? e.touches[0] : e;
+                const blockEl = e.currentTarget;
+                const blockId = parseInt(blockEl.dataset.id);
+                const blockIndex = blocks.findIndex(b => b.id === blockId);
+                const block = blocks[blockIndex];
+
+                const startX = touch.clientX;
+                const startY = touch.clientY;
+                const cellWidthPx = boardEl.clientWidth / BOARD_COLS;
+                const cellHeightPx = boardEl.clientHeight / BOARD_ROWS;
+
+                const initLeftPx = block.x * cellWidthPx;
+                const initTopPx = block.y * cellHeightPx;
+
+                let targetX = block.x;
+                let targetY = block.y;
+                let mergeTarget = null;
+                let moved = false;
+
+                blockEl.style.transition = 'none';
+
+                const onDragMove = (moveEvent) => {
+                    if (!blocks.some(b => b.id === blockId)) return;
+
+                    const currentTouch = moveEvent.type === 'touchmove' ? moveEvent.touches[0] : moveEvent;
+                    const deltaX = currentTouch.clientX - startX;
+                    const deltaY = currentTouch.clientY - startY;
+
+                    // 1. 見た目をカーソルに完全追従
+                    let currentLeft = initLeftPx + deltaX;
+                    let currentTop = initTopPx + deltaY;
+
+                    currentLeft = Math.max(0, Math.min(boardEl.clientWidth - cellWidthPx, currentLeft));
+                    currentTop = Math.max(0, Math.min(boardEl.clientHeight - cellHeightPx, currentTop));
+
+                    blockEl.style.left = currentLeft + 'px';
+                    blockEl.style.top = currentTop + 'px';
+
+                    // 2. マス目の位置を計算
+                    let gridX = Math.round(currentLeft / cellWidthPx);
+                    let gridY = Math.round(currentTop / cellHeightPx);
+
+                    if (gridX < 0 || gridX >= BOARD_COLS || gridY < 0 || gridY >= BOARD_ROWS) return;
+
+                    // 3. 移動が発生している場合のみルート上の障害物チェック（BFS）
+                    if (gridX !== block.x || gridY !== block.y) {
+                        let queue = [{ x: block.x, y: block.y }];
+                        let visited = Array.from({ length: BOARD_ROWS }, () => Array(BOARD_COLS).fill(false));
+                        visited[block.y][block.x] = true;
+
+                        let isPathFound = false;
+
+                        while (queue.length > 0) {
+                            let curr = queue.shift();
+
+                            if (curr.x === gridX && curr.y === gridY) {
+                                isPathFound = true;
+                                break;
+                            }
+
+                            const dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
+                            for (let d of dirs) {
+                                let nx = curr.x + d.x;
+                                let ny = curr.y + d.y;
+
+                                if (nx >= 0 && nx < BOARD_COLS && ny >= 0 && ny < BOARD_ROWS && !visited[ny][nx]) {
+                                    let obstacleOnPath = blocks.find(b => b.x === nx && b.y === ny);
+
+                                    if (nx === gridX && ny === gridY) {
+                                        visited[ny][nx] = true;
+                                        queue.push({ x: nx, y: ny });
+                                    } else if (!obstacleOnPath || obstacleOnPath.id === block.id) {
+                                        visited[ny][nx] = true;
+                                        queue.push({ x: nx, y: ny });
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!isPathFound) {
+                            targetX = block.x;
+                            targetY = block.y;
+                            mergeTarget = null;
+                            moved = false;
+                            return;
+                        }
+
+                        let obstacle = getBlockAt(gridX, gridY);
+                        if (!obstacle || obstacle.val === block.val) {
+                            targetX = gridX;
+                            targetY = gridY;
+                            mergeTarget = obstacle;
+                            moved = true;
+                        } else {
+                            targetX = block.x;
+                            targetY = block.y;
+                            mergeTarget = null;
+                            moved = false;
+                        }
+                    } else {
+                        targetX = block.x;
+                        targetY = block.y;
+                        mergeTarget = null;
+                        moved = false;
+                    }
+                };
+
+                const onDragEnd = () => {
+                    window.removeEventListener('mousemove', onDragMove);
+                    window.removeEventListener('mouseup', onDragEnd);
+                    window.removeEventListener('touchmove', onDragMove);
+                    window.removeEventListener('touchend', onDragEnd);
+
+                    if (blocks.some(b => b.id === blockId)) {
+                        blockEl.style.transition = 'background 0.2s, left 0.1s ease-out, top 0.1s ease-out';
+
+                        if (moved) {
+                            if (mergeTarget && mergeTarget.id !== block.id && mergeTarget.val === block.val) {
+                                let newVal = mergeTarget.val * 2;
+
+                                if (newVal === 2048) {
+                                    // 1. まず合体した2枚を盤面から消去
+                                    blocks = blocks.filter(b => b.id !== block.id && b.id !== mergeTarget.id);
+                                    blockEl.remove();
+
+                                    // 💥 【小さい順に最大10枚道連れボム】資産（デカい数字）を守って雑魚を一掃！
+                                    blocks.sort((a, b) => a.val - b.val);
+                                    const totalToBanish = Math.min(blocks.length, 10);
+
+                                    const banishedIds = blocks.slice(0, totalToBanish).map(b => b.id);
+                                    blocks = blocks.filter(b => !banishedIds.includes(b.id));
+
+                                    // 2. ✨ MISSION ACCOMPLISHED テキストに変更
+                                    const statusEl = document.getElementById('cyber-game-status');
+                                    if (statusEl) {
+                                        statusEl.innerHTML = '<strong style="color: #eab308; animation: cyber-blink 1s infinite alternate;">✨ MISSION ACCOMPLISHED ✨</strong>';
+
+                                        // ⏳ 勝ち誇る時間をたっぷり30秒間キープ！
+                                        setTimeout(() => {
+                                            if (!isGameOver && statusEl) {
+                                                statusEl.innerText = "同じ数字でマージ！(たまに4も湧くよ)";
+                                            }
+                                        }, 20000);
+                                    }
+
+                                    // 3. 広大な更地からゲーム再開！
+                                    spawnBlock();
+                                    checkGameOver();
+                                } else {
+                                    // 通常の合体処理（2048未満）
+                                    mergeTarget.val = newVal;
+                                    blocks = blocks.filter(b => b.id !== block.id);
+                                    blockEl.remove();
+                                    spawnBlock();
+                                    checkGameOver();
+                                }
+                            } else {
+                                // 合体なしの、純粋な空きマスへの移動
+                                block.x = targetX;
+                                block.y = targetY;
+                                spawnBlock();
+                                checkGameOver();
+                            }
+                        }
+
+                        // データの確定位置にピタッと綺麗に再描画
+                        renderBlocks();
+                    }
+                };
+
+                window.addEventListener('mousemove', onDragMove);
+                window.addEventListener('mouseup', onDragEnd);
+                window.addEventListener('touchmove', onDragMove, { passive: false });
+                window.addEventListener('touchend', onDragEnd);
+            }
+
+            function initGame() {
+                isGameOver = false;
+                blocks = [];
+                nextId = 1;
+
+                const boardEl = document.getElementById('cyber-merge-board');
+                if (boardEl) boardEl.innerHTML = '';
+
+                const statusEl = document.getElementById('cyber-game-status');
+                if (statusEl) statusEl.innerText = "同じ数字でマージ！！(たまに4も湧くよ)";
+
+                for (let i = 0; i < 4; i++) spawnBlock();
+                renderBlocks();
+            }
+
+            document.getElementById('cyber-btn-generate').addEventListener('click', initGame);
+            initGame();
+        })();
+    </script>
+
+</body>
+
+</html>

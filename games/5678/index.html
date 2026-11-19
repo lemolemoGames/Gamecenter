@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>上級5678</title>
+    <style>
+        :root {
+            --bg-primary: #f4f7f6;
+            --surface-color: #ffffff;
+            --text-main: #2c3e50;
+            --text-muted: #7f8c8d;
+            --accent-color: #e67e22;
+            --accent-hover: #d35400;
+            --success-color: #2ecc71;
+            --error-color: #e74c3c;
+            --hint-bg: #edf2f7;
+            --hint-border: #cbd5e1;
+            --border-radius: 12px;
+        }
+
+        #math-logic-game-root * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* クリア時に数字選択をさせないためのスタイル群 */
+        #math-logic-game-root.cleared .key-btn {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        #math-logic-game-root.cleared .digit-slot {
+            border-color: var(--success-color) !important;
+            background-color: rgba(46, 204, 113, 0.05) !important;
+            color: #1e7e34 !important;
+            pointer-events: none;
+        }
+
+        #math-logic-game-root.cleared #math-game-memo {
+            opacity: 0.7;
+        }
+
+        #math-game-memo {
+            font-size: 20px !important;
+        }
+
+        .game-container {
+            width: 95%;
+            max-width: 420px;
+            background: var(--surface-color);
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            padding: 12px;
+            margin: 10px auto;
+            padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .game-container .section-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--text-muted);
+        }
+
+        .game-container .hint-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding-left: 0;
+            margin: 0;
+        }
+
+        .game-container .hint-item {
+            background: var(--surface-color);
+            border: 1px solid var(--hint-border);
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: var(--text-main);
+            text-align: left;
+            line-height: 1.4;
+            user-select: none;
+        }
+
+        .game-container .input-display {
+            display: flex;
+            justify-content: space-between;
+            gap: 6px;
+        }
+
+        .game-container .digit-slot {
+            flex: 1;
+            height: 40px;
+            border: 2px solid var(--hint-border);
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            background: var(--surface-color);
+            color: var(--text-main);
+            user-select: none;
+            cursor: pointer;
+        }
+
+        .game-container .digit-slot.active {
+            border-color: var(--accent-color);
+            background-color: rgba(230, 126, 34, 0.05);
+        }
+
+        .game-container .keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            margin-bottom: 12px;
+        }
+
+        .game-container .key-btn {
+            background: var(--surface-color);
+            border: 1px solid var(--hint-border);
+            padding: 6px 0;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--text-main);
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        .game-container .key-btn:active {
+            background: #e2e8f0;
+        }
+
+        .game-container .key-btn.action-btn {
+            background: #edf2f7;
+        }
+
+        .game-container .key-btn.submit-btn {
+            background: var(--success-color);
+            color: white;
+            border-color: var(--success-color);
+            grid-column: span 3;
+            font-size: 0.9rem;
+            padding: 8px 0;
+        }
+
+        .game-container .key-btn.submit-btn:active {
+            background: #27ae60;
+        }
+
+        .game-container .message-box {
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: none;
+        }
+
+        .game-container .message-box.success {
+            display: block !important;
+            background-color: rgba(46, 204, 113, 0.15) !important;
+            color: #1e7e34 !important;
+            border: 1px solid rgba(46, 204, 113, 0.3) !important;
+        }
+
+        .game-container .message-box.error {
+            display: block !important;
+            background-color: rgba(231, 76, 60, 0.15) !important;
+            color: #b21f1f !important;
+            border: 1px solid rgba(231, 76, 60, 0.3) !important;
+        }
+
+        .game-container .system-btn {
+            width: 100%;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        .game-container .system-btn:active {
+            background: var(--accent-hover);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="math-logic-game-root" class="game-container">
+        <header style="margin-bottom: 10px; border-bottom: 1px solid #eee;">
+            <h1 style="margin: 0; font-size: 1.1rem;">4桁数字特定パズル</h1>
+            <p style="margin: 2px 0 0 0; font-size: 0.75rem; color: #7f8c8d;">4桁の数字と配置をすべて見抜け！</p>
+        </header>
+        <div class="section" style="margin-bottom: 10px;">
+            <div class="section-title">🔍 手がかり</div>
+            <ul id="math-secondary-hints" class="hint-list"></ul>
+        </div>
+        <div class="section" style="margin-bottom: 10px;">
+            <div class="section-title">📝 推理用メモ</div>
+            <textarea id="math-game-memo"
+                style="width: 100%; height: 50px; border: 1px solid var(--hint-border); border-radius: 6px; padding: 6px; font-size: 0.85rem; resize: none; font-family: monospace, sans-serif; letter-spacing: 1px;"
+                placeholder="ここに候補の数字などを書き込んでね...">0123456789</textarea>
+        </div>
+        <div id="math-game-message" class="message-box"></div>
+        <div class="section" style="margin-bottom: 10px;">
+            <div class="input-display" style="margin-bottom: 8px;">
+                <div class="digit-slot active" data-index="0">-</div>
+                <div class="digit-slot" data-index="1">-</div>
+                <div class="digit-slot" data-index="2">-</div>
+                <div class="digit-slot" data-index="3">-</div>
+            </div>
+            <div class="keypad" style="gap: 5px;"><button class="key-btn num-key">1</button> <button
+                    class="key-btn num-key">2</button> <button class="key-btn num-key">3</button> <button
+                    class="key-btn num-key">4</button> <button class="key-btn num-key">5</button> <button
+                    class="key-btn num-key">6</button> <button class="key-btn num-key">7</button> <button
+                    class="key-btn num-key">8</button> <button class="key-btn num-key">9</button> <button
+                    id="math-key-clear" class="key-btn action-btn">C</button> <button class="key-btn num-key">0</button>
+                <button id="math-key-back" class="key-btn action-btn">⌫</button> <button id="math-key-submit"
+                    class="key-btn submit-btn">回答する</button>
+            </div>
+        </div>
+        <div style="display: flex; gap: 5px; margin-bottom: 8px;"><button id="math-btn-hint" class="system-btn"
+                style="background: #95a5a6; flex: 1; padding: 8px; font-size: 0.85rem;">ヒント</button> <button
+                id="math-btn-giveup" class="system-btn"
+                style="background: #7f8c8d; flex: 1; padding: 8px; font-size: 0.85rem;">降参する</button></div>
+        <button id="math-btn-restart" class="system-btn" style="padding: 8px; font-size: 0.85rem;">新しい問題を生成</button>
+    </div>
+
+    <script>
+        (function () {
+            document.addEventListener('touchstart', function (e) { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
+            class HatenaMathLogicGame {
+                constructor() {
+                    this.rootEl = document.getElementById('math-logic-game-root');
+                    this.allCandidates = [];
+                    this.answer = "";
+                    this.minimalHints = [];
+                    this.currentInput = ["", "", "", ""];
+                    this.currentSlotIndex = 0;
+                    this.gameCleared = false;
+                    this.initDOMRefs();
+                    this.initEvents();
+                    this.startNewGame();
+                }
+
+                initDOMRefs() {
+                    this.dom = {
+                        secondaryHints: document.getElementById('math-secondary-hints'),
+                        slots: document.querySelectorAll('#math-logic-game-root .digit-slot'),
+                        message: document.getElementById('math-game-message'),
+                        btnSubmit: document.getElementById('math-key-submit'),
+                        btnRestart: document.getElementById('math-btn-restart'),
+                        btnHint: document.getElementById('math-btn-hint'),
+                        btnGiveUp: document.getElementById('math-btn-giveup'),
+                        btnClear: document.getElementById('math-key-clear'),
+                        btnBack: document.getElementById('math-key-back'),
+                        memo: document.getElementById('math-game-memo')
+                    };
+                }
+
+                initEvents() {
+                    document.querySelectorAll('#math-logic-game-root .num-key').forEach(btn => {
+                        btn.addEventListener('click', () => this.handleNumInput(btn.textContent));
+                    });
+                    this.dom.btnClear.addEventListener('click', () => this.clearInput());
+                    this.dom.btnBack.addEventListener('click', () => this.handleBackspace());
+                    this.dom.btnSubmit.addEventListener('click', () => this.checkUserAnswer());
+                    this.dom.btnRestart.addEventListener('click', () => this.startNewGame());
+                    this.dom.btnHint.addEventListener('click', () => this.giveHint());
+                    this.dom.btnGiveUp.addEventListener('click', () => this.giveUp());
+                    this.dom.slots.forEach(slot => {
+                        slot.addEventListener('click', () => {
+                            if (this.gameCleared) return;
+                            this.currentSlotIndex = parseInt(slot.dataset.index);
+                            this.updateInputDisplay();
+                        });
+                    });
+                }
+
+                generateAllCandidates() {
+                    const list = [];
+                    for (let i = 0; i <= 9999; i++) {
+                        let str = i.toString().padStart(4, '0');
+                        if (new Set(str).size === 4) list.push(str);
+                    }
+                    return list;
+                }
+
+                startNewGame() {
+                    this.gameCleared = false;
+                    this.rootEl.classList.remove('cleared'); // ロック解除
+                    this.clearInput();
+                    this.showMessege("");
+
+                    // メモの初期値を毎回自動セット
+                    this.dom.memo.value = "0123456789";
+                    this.dom.message.style.display = 'none';
+
+                    this.allCandidates = this.generateAllCandidates();
+                    this.answer = this.allCandidates[Math.floor(Math.random() * this.allCandidates.length)];
+                    console.log("[数学デバッグ] 答え:", this.answer);
+
+                    this.generateAndMinimizeHints();
+                    this.renderHints();
+                }
+
+                generatePotentialHints() {
+                    const pool = [];
+                    const ans = this.answer;
+                    const d = ans.split('').map(Number);
+
+                    // ---- 1. 数式・計算系ヒント ----
+                    const posNames = ["1番目", "2番目", "3番目", "4番目"];
+                    for (let i = 0; i < 4; i++) {
+                        for (let j = 0; j < 4; j++) {
+                            if (i === j) continue;
+                            for (let k = 0; k < 4; k++) {
+                                if (k === i || k === j) continue;
+                                if (d[i] + d[j] === d[k]) {
+                                    let sortedPos = [posNames[i], posNames[j]].sort();
+                                    pool.push({
+                                        text: `「${sortedPos[0]}の数字」と「${sortedPos[1]}の数字」を足すと、${posNames[k]}の数字になります。`,
+                                        filter: (s) => parseInt(s[i]) + parseInt(s[j]) === parseInt(s[k])
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    let maxVal = Math.max(...d), minVal = Math.min(...d);
+                    if (minVal > 0 && maxVal % minVal === 0 && maxVal !== minVal) {
+                        let multiple = maxVal / minVal;
+                        pool.push({
+                            text: `「4つの数字の中で最も大きい数字」は、「最も小さい数字」のちょうど ${multiple} 倍です。`,
+                            filter: (s) => {
+                                let arr = s.split('').map(Number);
+                                let mx = Math.max(...arr), mn = Math.min(...arr);
+                                return mn > 0 && mx === mn * multiple;
+                            }
+                        });
+                    }
+
+                    // ---- 2. 属性系ヒント ----
+                    let count3 = d.filter(x => x % 3 === 0).length;
+                    pool.push({
+                        text: `4つの数字の中に、「3の倍数（0を含む）」は ${count3} 個あります。`,
+                        filter: (s) => s.split('').map(Number).filter(x => x % 3 === 0).length === count3
+                    });
+
+                    for (let i = 0; i < 3; i++) {
+                        if (d[i] % 2 === 0 && d[i + 1] % 2 === 0) {
+                            pool.push({
+                                text: `左から ${i + 1}番目 と ${i + 2}番目 の数字は、2つとも「偶数」です。`,
+                                filter: (s) => parseInt(s[i]) % 2 === 0 && parseInt(s[i + 1]) % 2 === 0
+                            });
+                        }
+                        if (d[i] % 2 !== 0 && d[i + 1] % 2 !== 0) {
+                            pool.push({
+                                text: `左から ${i + 1}番目 と ${i + 2}番目 の数字は、2つとも「奇数」です。`,
+                                filter: (s) => parseInt(s[i]) % 2 !== 0 && parseInt(s[i + 1]) % 2 !== 0
+                            });
+                        }
+                    }
+
+                    // ---- 3. 範囲・しきい値系ヒント ----
+                    for (let threshold = 3; threshold <= 6; threshold++) {
+                        let upperCount = d.filter(x => x > threshold).length;
+                        let lowerCount = d.filter(x => x <= threshold).length;
+                        pool.push({
+                            text: `「${threshold}」より大きい数字は ${upperCount} 個含まれます。`,
+                            filter: (s) => s.split('').map(Number).filter(x => x > threshold).length === upperCount
+                        });
+                        pool.push({
+                            text: `「${threshold}」以下の数字は ${lowerCount} 個含まれます。`,
+                            filter: (s) => s.split('').map(Number).filter(x => x <= threshold).length === lowerCount
+                        });
+                    }
+
+                    let sumAll = d.reduce((a, b) => a + b, 0);
+                    pool.push({
+                        text: `4つの数字を「すべて足した合計」は ${sumAll} になります。`,
+                        filter: (s) => s.split('').map(Number).reduce((a, b) => a + b, 0) === sumAll
+                    });
+
+                    for (let i = 0; i < 4; i++) {
+                        for (let j = i + 1; j < 4; j++) {
+                            if (d[i] > d[j]) {
+                                pool.push({
+                                    text: `「${posNames[i]}の数字」は、「${posNames[j]}の数字」よりも大きいです。`,
+                                    filter: (s) => parseInt(s[i]) > parseInt(s[j])
+                                });
+                            } else {
+                                pool.push({
+                                    text: `「${posNames[i]}の数字」は、「${posNames[j]}の数字」よりも小さいです.`,
+                                    filter: (s) => parseInt(s[i]) < parseInt(s[j])
+                                });
+                            }
+                        }
+                    }
+
+                    for (let i = pool.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        // 要素を入れ替える（分割代入）
+                        [pool[i], pool[j]] = [pool[j], pool[i]];
+                    }
+
+                    return pool;
+                }
+
+                generateAndMinimizeHints() {
+                    let potentialHints = this.generatePotentialHints();
+                    let activeHints = [];
+                    let currentList = [...this.allCandidates];
+
+                    for (let hint of potentialHints) {
+                        let nextList = currentList.filter(hint.filter);
+                        if (nextList.length < currentList.length || currentList.length === 1) {
+                            activeHints.push(hint);
+                            currentList = nextList;
+                        }
+                        if (currentList.length === 1) break;
+                    }
+
+                    if (currentList.length !== 1) { this.startNewGame(); return; }
+
+                    let changed = true;
+                    while (changed) {
+                        changed = false;
+                        for (let i = 0; i < activeHints.length; i++) {
+                            let testHints = activeHints.filter((_, idx) => idx !== i);
+                            let testList = [...this.allCandidates];
+                            for (let th of testHints) {
+                                testList = testList.filter(th.filter);
+                            }
+                            if (testList.length === 1) {
+                                activeHints.splice(i, 1);
+                                changed = true;
+                                break;
+                            }
+                        }
+                    }
+                    this.minimalHints = activeHints;
+                }
+
+                renderHints() {
+                    this.dom.secondaryHints.innerHTML = "";
+                    this.minimalHints.forEach(hint => {
+                        const li = document.createElement('li');
+                        li.className = 'hint-item';
+                        li.textContent = hint.text;
+                        this.dom.secondaryHints.appendChild(li);
+                    });
+                }
+
+                handleNumInput(num) {
+                    if (this.gameCleared) return;
+                    this.currentInput[this.currentSlotIndex] = num;
+                    if (this.currentSlotIndex < 3) this.currentSlotIndex++;
+                    this.updateInputDisplay();
+                }
+
+                handleBackspace() {
+                    if (this.gameCleared) return;
+                    this.currentInput[this.currentSlotIndex] = "";
+                    if (this.currentSlotIndex > 0) this.currentSlotIndex--;
+                    this.updateInputDisplay();
+                }
+
+                clearInput() {
+                    this.currentInput = ["", "", "", ""];
+                    this.currentSlotIndex = 0;
+                    this.updateInputDisplay();
+                }
+
+                updateInputDisplay() {
+                    this.dom.slots.forEach((slot, idx) => {
+                        slot.textContent = this.currentInput[idx] || "-";
+                        if (idx === this.currentSlotIndex && !this.gameCleared) {
+                            slot.classList.add('active');
+                        } else {
+                            slot.classList.remove('active');
+                        }
+                    });
+                }
+
+                checkUserAnswer() {
+                    if (this.gameCleared) return;
+                    const guessStr = this.currentInput.join("");
+                    if (guessStr.length < 4) { this.showMessege("エラー：4桁入力してください。", "error"); return; }
+                    if (guessStr === this.answer) {
+                        this.gameCleared = true;
+                        this.rootEl.classList.add('cleared'); // 正解時に全体をロック状態にするCSSクラスを適用
+                        this.showMessege(`🎉 正解！答えは「${this.answer}」でした！`, "success");
+                        this.dom.slots.forEach(slot => slot.classList.remove('active'));
+                    } else {
+                        this.showMessege("❌ 違います！条件をもう一度見直そう。", "error");
+                    }
+                }
+
+                showMessege(text, type) {
+                    this.dom.message.textContent = text;
+                    this.dom.message.className = `message-box ${type}`;
+                }
+
+                // 1個だけランダムに場所と数字を教えるヒント機能
+                giveHint() {
+                    if (this.gameCleared) return;
+                    const posNames = ["1番目", "2番目", "3番目", "4番目"];
+                    const randomIndex = Math.floor(Math.random() * 4);
+                    const targetDigit = this.answer[randomIndex];
+
+                    this.showMessege(`💡 ヒント: 左から ${posNames[randomIndex]} の数字は 「${targetDigit}」 です！`, "success");
+                }
+
+                // 降参して答えをロックする機能
+                giveUp() {
+                    if (this.gameCleared) return;
+                    this.gameCleared = true;
+                    this.rootEl.classList.add('cleared'); // 正解時と同じく入力をロック
+                    this.showMessege(`🏳 降参：正解は「${this.answer}」でした。次の問題に挑戦しよう！`, "error");
+                }
+            }
+
+            window.addEventListener('DOMContentLoaded', () => { new HatenaMathLogicGame(); });
+        })();
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>数独</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            touch-action: manipulation;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 10px;
+        }
+
+        h1 {
+            font-size: 1.4rem;
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+
+        /* 上部コントロール */
+        .top-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+            width: 100%;
+            max-width: 400px;
+            justify-content: space-between;
+        }
+
+        button {
+            padding: 10px 14px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            background-color: #007bff;
+            color: white;
+            transition: background-color 0.15s, opacity 0.15s;
+        }
+
+        button:active {
+            transform: scale(0.97);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        button.mode-note {
+            background-color: #28a745;
+        }
+
+        button.btn-new {
+            background-color: #6c757d;
+        }
+
+        /* 盤面とオーバーレイをまとめるコンテナ */
+        .board-container {
+            position: relative;
+            width: 92vw;
+            max-width: 400px;
+            aspect-ratio: 1 / 1;
+        }
+
+        /* クリアメッセージ（ボードの上に重ねる） */
+        #clear-banner {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            width: 82%;
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.5), rgba(32, 201, 151, 0.5));
+            color: white;
+            text-align: center;
+            font-weight: bold;
+            font-size: 18px;
+            padding: 18px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            backdrop-filter: blur(2px);
+        }
+
+        #clear-banner.show {
+            display: block;
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        /* 数独ボード */
+        #board {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            grid-template-rows: repeat(9, 1fr);
+            width: 100%;
+            height: 100%;
+            border: 3px solid #222;
+            background-color: #999;
+            gap: 1px;
+        }
+
+        #board.locked {
+            pointer-events: none;
+        }
+
+        #board.locked .cell {
+            background-color: #f8fff9;
+        }
+
+        #board.locked .cell.fixed {
+            background-color: #e6f4ea;
+        }
+
+        .cell {
+            background-color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(18px, 5vw, 24px);
+            font-weight: bold;
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+            color: #0066cc;
+        }
+
+        .cell.fixed {
+            background-color: #eef1f5;
+            color: #222;
+        }
+
+        .cell.related {
+            background-color: #f0f7ff;
+        }
+
+        .cell.same-num {
+            background-color: #cfe2ff;
+        }
+
+        .cell.selected {
+            background-color: #9ec5fe !important;
+        }
+
+        /* 数字の重複エラー表示 */
+        .cell.error {
+            background-color: #ffd6d6 !important;
+            color: #d90429 !important;
+        }
+
+        .cell.selected.error {
+            background-color: #ffb3b3 !important;
+        }
+
+        /* 仮置き（メモ）のグリッド */
+        .notes {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            font-size: clamp(8px, 2.2vw, 11px);
+            color: #555;
+            pointer-events: none;
+        }
+
+        .note-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        /* スマホ用テンキーパッド */
+        .numpad {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            width: 92vw;
+            max-width: 400px;
+            margin-top: 15px;
+        }
+
+        .num-btn {
+            background-color: #fff;
+            color: #333;
+            border: 1px solid #ccc;
+            font-size: 20px;
+            padding: 12px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .num-btn:active:not(:disabled) {
+            background-color: #e2e6ea;
+        }
+
+        .num-btn.clear-key {
+            background-color: #ffe3e6;
+            color: #c92a2a;
+            border-color: #ffa8a8;
+            font-size: 15px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="top-controls">
+        <button id="mode-btn" onclick="toggleMode()">✏️ 通常入力</button>
+        <button class="btn-new" onclick="newGame()">🔄 新しい問題</button>
+    </div>
+
+    <!-- 盤面とクリアメッセージを包むコンテナ -->
+    <div class="board-container">
+        <div id="clear-banner">CLEAR！</div>
+        <div id="board"></div>
+    </div>
+
+    <!-- スマホ・マウス操作用テンキー -->
+    <div class="numpad">
+        <button class="num-btn" onclick="handleInput(1)">1</button>
+        <button class="num-btn" onclick="handleInput(2)">2</button>
+        <button class="num-btn" onclick="handleInput(3)">3</button>
+        <button class="num-btn" onclick="handleInput(4)">4</button>
+        <button class="num-btn" onclick="handleInput(5)">5</button>
+        <button class="num-btn" onclick="handleInput(6)">6</button>
+        <button class="num-btn" onclick="handleInput(7)">7</button>
+        <button class="num-btn" onclick="handleInput(8)">8</button>
+        <button class="num-btn" onclick="handleInput(9)">9</button>
+        <button class="num-btn clear-key" onclick="clearCell()">消去</button>
+    </div>
+
+    <script>
+        let board = [];
+        let initial = [];
+        let notes = [];
+        let selectedCell = null; // {r, c}
+        let isNoteMode = false;
+        let isGameCleared = false;
+
+        function initData() {
+            board = Array(9).fill(0).map(() => Array(9).fill(0));
+            initial = Array(9).fill(0).map(() => Array(9).fill(false));
+            notes = Array(9).fill(0).map(() => Array(9).fill(0).map(() => new Set()));
+        }
+
+        function generateSudoku() {
+            initData();
+            let tempBoard = Array(9).fill(0).map(() => Array(9).fill(0));
+            fillBoard(tempBoard, 0, 0);
+
+            // 生成された解答をベースにする
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    board[r][c] = tempBoard[r][c];
+                }
+            }
+
+            // 穴を空ける（難易度：ランダムに約45マス削除）
+            let removeCount = 45;
+            while (removeCount > 0) {
+                let r = Math.floor(Math.random() * 9);
+                let c = Math.floor(Math.random() * 9);
+                if (board[r][c] !== 0) {
+                    board[r][c] = 0;
+                    removeCount--;
+                }
+            }
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (board[r][c] !== 0) {
+                        initial[r][c] = true;
+                    }
+                }
+            }
+        }
+
+        function fillBoard(b, r, c) {
+            if (r === 9) return true;
+            let nextR = c === 8 ? r + 1 : r;
+            let nextC = c === 8 ? 0 : c + 1;
+
+            let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5);
+            for (let num of nums) {
+                if (isValid(b, r, c, num)) {
+                    b[r][c] = num;
+                    if (fillBoard(b, nextR, nextC)) return true;
+                    b[r][c] = 0;
+                }
+            }
+            return false;
+        }
+
+        function isValid(b, r, c, num) {
+            for (let i = 0; i < 9; i++) {
+                if (b[r][i] === num) return false;
+                if (b[i][c] === num) return false;
+            }
+            let startR = Math.floor(r / 3) * 3;
+            let startC = Math.floor(c / 3) * 3;
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    if (b[startR + i][startC + j] === num) return false;
+                }
+            }
+            return true;
+        }
+
+        // 同じ行・列・3x3ブロック内で数字が被っている座標をSetで返す
+        function findDuplicates() {
+            const duplicates = new Set();
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const val = board[r][c];
+                    if (val === 0) continue;
+
+                    // 同じ行をチェック
+                    for (let i = 0; i < 9; i++) {
+                        if (i !== c && board[r][i] === val) {
+                            duplicates.add(`${r},${c}`);
+                            duplicates.add(`${r},${i}`);
+                        }
+                    }
+                    // 同じ列をチェック
+                    for (let i = 0; i < 9; i++) {
+                        if (i !== r && board[i][c] === val) {
+                            duplicates.add(`${r},${c}`);
+                            duplicates.add(`${i},${c}`);
+                        }
+                    }
+                    // 同じ3x3ブロックをチェック
+                    const startR = Math.floor(r / 3) * 3;
+                    const startC = Math.floor(c / 3) * 3;
+                    for (let i = 0; i < 3; i++) {
+                        for (let j = 0; j < 3; j++) {
+                            const nr = startR + i;
+                            const nc = startC + j;
+                            if ((nr !== r || nc !== c) && board[nr][nc] === val) {
+                                duplicates.add(`${r},${c}`);
+                                duplicates.add(`${nr},${nc}`);
+                            }
+                        }
+                    }
+                }
+            }
+            return duplicates;
+        }
+
+        function renderBoard() {
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+
+            if (isGameCleared) {
+                boardEl.classList.add('locked');
+            } else {
+                boardEl.classList.remove('locked');
+            }
+
+            const selectedVal = (!isGameCleared && selectedCell) ? board[selectedCell.r][selectedCell.c] : 0;
+            const duplicates = findDuplicates();
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    if (initial[r][c]) cell.classList.add('fixed');
+
+                    // 重複エラー判定
+                    if (duplicates.has(`${r},${c}`)) {
+                        cell.classList.add('error');
+                    }
+
+                    // クリア時はハイライトを解除して盤面全体を見やすくする
+                    if (!isGameCleared && selectedCell) {
+                        const isSameRow = selectedCell.r === r;
+                        const isSameCol = selectedCell.c === c;
+                        const isSameBox = Math.floor(selectedCell.r / 3) === Math.floor(r / 3) &&
+                            Math.floor(selectedCell.c / 3) === Math.floor(c / 3);
+                        if (isSameRow || isSameCol || isSameBox) {
+                            cell.classList.add('related');
+                        }
+                        if (selectedVal !== 0 && board[r][c] === selectedVal) {
+                            cell.classList.add('same-num');
+                        }
+                        if (isSameRow && isSameCol) {
+                            cell.classList.add('selected');
+                        }
+                    }
+
+                    // 3x3の太線
+                    if (c === 2 || c === 5) cell.style.borderRight = '2px solid #222';
+                    if (r === 2 || r === 5) cell.style.borderBottom = '2px solid #222';
+
+                    if (board[r][c] !== 0) {
+                        cell.textContent = board[r][c];
+                    } else {
+                        const notesEl = document.createElement('div');
+                        notesEl.className = 'notes';
+                        for (let n = 1; n <= 9; n++) {
+                            const noteItem = document.createElement('div');
+                            noteItem.className = 'note-item';
+                            if (notes[r][c].has(n)) {
+                                noteItem.textContent = n;
+                            }
+                            notesEl.appendChild(noteItem);
+                        }
+                        cell.appendChild(notesEl);
+                    }
+
+                    cell.addEventListener('click', () => {
+                        if (isGameCleared) return;
+                        selectedCell = { r, c };
+                        renderBoard();
+                    });
+                    boardEl.appendChild(cell);
+                }
+            }
+        }
+
+        function setControlsDisabled(disabled) {
+            document.getElementById('mode-btn').disabled = disabled;
+            document.querySelectorAll('.num-btn').forEach(btn => {
+                btn.disabled = disabled;
+            });
+        }
+
+        function toggleMode() {
+            if (isGameCleared) return;
+            isNoteMode = !isNoteMode;
+            const btn = document.getElementById('mode-btn');
+            if (isNoteMode) {
+                btn.textContent = "📝 仮置き(メモ)";
+                btn.classList.add('mode-note');
+            } else {
+                btn.textContent = "✏️ 通常入力";
+                btn.classList.remove('mode-note');
+            }
+        }
+
+        function handleInput(num) {
+            if (isGameCleared || !selectedCell) return;
+            let { r, c } = selectedCell;
+            if (initial[r][c]) return;
+
+            if (isNoteMode) {
+                if (board[r][c] !== 0) {
+                    board[r][c] = 0;
+                }
+                if (notes[r][c].has(num)) {
+                    notes[r][c].delete(num);
+                } else {
+                    notes[r][c].add(num);
+                }
+            } else {
+                board[r][c] = (board[r][c] === num) ? 0 : num;
+                notes[r][c].clear();
+            }
+
+            checkWin();
+            renderBoard();
+        }
+
+        function clearCell() {
+            if (isGameCleared || !selectedCell) return;
+            let { r, c } = selectedCell;
+            if (initial[r][c]) return;
+
+            board[r][c] = 0;
+            notes[r][c].clear();
+            renderBoard();
+        }
+
+        // 修正：すべてのマスが埋まっており、かつ重複がなければクリア
+        function checkWin() {
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (board[r][c] === 0) return; // 未入力のマスがあれば未クリア
+                }
+            }
+
+            // 重複エラーがないかチェック
+            const duplicates = findDuplicates();
+            if (duplicates.size > 0) return; // 重複があれば未クリア
+
+            // クリア処理
+            isGameCleared = true;
+            selectedCell = null;
+            const banner = document.getElementById('clear-banner');
+            banner.style.display = 'block';
+            setTimeout(() => banner.classList.add('show'), 10);
+            setControlsDisabled(true);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (isGameCleared) return;
+            let num = parseInt(e.key);
+            if (num >= 1 && num <= 9) {
+                handleInput(num);
+            } else if (e.key === 'Backspace' || e.key === 'Delete') {
+                clearCell();
+            }
+        });
+
+        function newGame() {
+            isGameCleared = false;
+            selectedCell = null;
+            const banner = document.getElementById('clear-banner');
+            banner.classList.remove('show');
+            setTimeout(() => banner.style.display = 'none', 300);
+            setControlsDisabled(false);
+            generateSudoku();
+            renderBoard();
+        }
+
+        newGame();
+    </script>
+
+</body>
+
+</html>
